@@ -271,7 +271,7 @@ const EditPlayerModal: FC<{ show: boolean; onClose: () => void; onUpdate: (playe
 
 // --- Composants de Page ---
 
-const PlayerManagement: FC<{ players: PlayerWithStats[]; userId: string | null; isAdmin: boolean }> = ({ players, userId, isAdmin }) => {
+const PlayerManagement: FC<{ players: PlayerWithStats[]; isAdmin: boolean }> = ({ players, isAdmin }) => {
     const [newName, setNewName] = useState('');
     const [imageUrl, setImageUrl] = useState('');
     const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -280,16 +280,16 @@ const PlayerManagement: FC<{ players: PlayerWithStats[]; userId: string | null; 
     const [playerToEdit, setPlayerToEdit] = useState<PlayerWithStats | null>(null);
 
     const addPlayer = async () => {
-        if (!newName.trim() || !userId) return;
-        const playersCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/players`);
+        if (!newName.trim()) return;
+        const playersCollectionRef = collection(db, `artifacts/${appId}/public/data/players`);
         await addDoc(playersCollectionRef, { name: newName, imageUrl: imageUrl, totalScore: 0 });
         setNewName(''); setImageUrl('');
     };
 
     const handleRemoveClick = (player: PlayerWithStats) => { setPlayerToRemove(player); setShowConfirmModal(true); };
     const confirmRemovePlayer = async () => {
-        if (!userId || !playerToRemove) return;
-        await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/players`, playerToRemove.id));
+        if (!playerToRemove) return;
+        await deleteDoc(doc(db, `artifacts/${appId}/public/data/players`, playerToRemove.id));
         setShowConfirmModal(false); setPlayerToRemove(null);
     };
 
@@ -299,8 +299,7 @@ const PlayerManagement: FC<{ players: PlayerWithStats[]; userId: string | null; 
     };
 
     const handleUpdatePlayer = async (playerId: string, updatedData: { name: string; imageUrl: string }) => {
-        if (!userId) return;
-        const playerRef = doc(db, `artifacts/${appId}/users/${userId}/players`, playerId);
+        const playerRef = doc(db, `artifacts/${appId}/public/data/players`, playerId);
         await updateDoc(playerRef, updatedData);
         setShowEditModal(false);
         setPlayerToEdit(null);
@@ -337,7 +336,7 @@ const PlayerManagement: FC<{ players: PlayerWithStats[]; userId: string | null; 
     );
 }
 
-const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) => Promise<void>; userId: string | null }> = ({ players, onGameEnd }) => {
+const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) => Promise<void>;}> = ({ players, onGameEnd }) => {
     const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
     const [chipCounts, setChipCounts] = useState<{[key: string]: string}>({});
     const [isGameStarted, setIsGameStarted] = useState(false);
@@ -550,7 +549,7 @@ export default function App() {
     const [view, setView] = useState('home');
     const [players, setPlayers] = useState<Player[]>([]);
     const [games, setGames] = useState<Game[]>([]);
-    const [userId, setUserId] = useState<string | null>(null);
+    const [isAuthReady, setIsAuthReady] = useState(false);
     const [loading, setLoading] = useState(true);
     const [editingGame, setEditingGame] = useState<Game | null>(null);
     const [isAdmin, setIsAdmin] = useState(false);
@@ -563,24 +562,23 @@ export default function App() {
 
     useEffect(() => {
         const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                setUserId(user.uid);
-            } else {
+            if (!user) {
                 try {
                     await signInAnonymously(auth);
                 } catch (error) {
                     console.error("Erreur d'authentification anonyme:", error);
                 }
             }
+            setIsAuthReady(true);
         });
         return () => unsubscribeAuth();
     }, []);
     
     useEffect(() => {
-        if (!userId) { setLoading(false); return; };
+        if (!isAuthReady) return;
         setLoading(true);
-        const playersQuery = query(collection(db, `artifacts/${appId}/users/${userId}/players`));
-        const gamesQuery = query(collection(db, `artifacts/${appId}/users/${userId}/games`));
+        const playersQuery = query(collection(db, `artifacts/${appId}/public/data/players`));
+        const gamesQuery = query(collection(db, `artifacts/${appId}/public/data/games`));
         
         const unsubPlayers = onSnapshot(playersQuery, (snap) => { 
             const playersData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player));
@@ -594,7 +592,7 @@ export default function App() {
         }, (err) => console.error("Games read error: ", err));
         
         return () => { unsubPlayers(); unsubGames(); };
-    }, [userId]);
+    }, [isAuthReady]);
 
     const playersWithStats = useMemo((): PlayerWithStats[] => {
         try {
@@ -652,17 +650,17 @@ export default function App() {
     const handleAdminLogout = () => { setIsAdmin(false); showAlert("Mode administrateur désactivé"); };
     
     const handleResetScores = async () => {
-        if (!userId || !isAdmin) return;
+        if (!isAdmin) return;
         setShowResetConfirm(false);
         const batch = writeBatch(db);
 
         players.forEach(player => {
-            const playerRef = doc(db, `artifacts/${appId}/users/${userId}/players`, player.id);
+            const playerRef = doc(db, `artifacts/${appId}/public/data/players`, player.id);
             batch.update(playerRef, { totalScore: 0 });
         });
 
         games.forEach(game => {
-            const gameRef = doc(db, `artifacts/${appId}/users/${userId}/games`, game.id);
+            const gameRef = doc(db, `artifacts/${appId}/public/data/games`, game.id);
             batch.delete(gameRef);
         });
 
@@ -671,11 +669,10 @@ export default function App() {
     };
 
     const handleGameEnd = async (scoredPlayers: GamePlayer[]) => {
-        if (!userId) return;
-        const gamesCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/games`);
+        const gamesCollectionRef = collection(db, `artifacts/${appId}/public/data/games`);
         await addDoc(gamesCollectionRef, { date: new Date(), players: scoredPlayers.map(({ playerId, name, chipCount, score }) => ({ playerId, name, chipCount, score })) });
         for (const sp of scoredPlayers) {
-            const playerRef = doc(db, `artifacts/${appId}/users/${userId}/players`, sp.playerId);
+            const playerRef = doc(db, `artifacts/${appId}/public/data/players`, sp.playerId);
             const player = players.find(p => p.id === sp.playerId);
             if(player) await updateDoc(playerRef, { totalScore: (player.totalScore || 0) + sp.score });
         }
@@ -683,7 +680,6 @@ export default function App() {
     };
 
     const handleGameUpdate = async (gameToUpdate: Game, newChipCounts: {[key: string]: string}) => {
-        if (!userId) return;
         const originalGame = games.find(g => g.id === gameToUpdate.id);
         if (!originalGame) return;
 
@@ -696,13 +692,13 @@ export default function App() {
             if (scoreDiff !== 0) {
                 const player = players.find(p => p.id === newP.playerId);
                 if (player) {
-                    const playerRef = doc(db, `artifacts/${appId}/users/${userId}/players`, player.id);
+                    const playerRef = doc(db, `artifacts/${appId}/public/data/players`, player.id);
                     batch.update(playerRef, { totalScore: (player.totalScore || 0) + scoreDiff });
                 }
             }
         });
 
-        const gameRef = doc(db, `artifacts/${appId}/users/${userId}/games`, gameToUpdate.id);
+        const gameRef = doc(db, `artifacts/${appId}/public/data/games`, gameToUpdate.id);
         batch.update(gameRef, { players: updatedPlayers.map(({ playerId, name, chipCount, score }) => ({ playerId, name, chipCount, score })) });
 
         await batch.commit();
@@ -721,12 +717,11 @@ export default function App() {
     }
 
     const renderView = () => {
-        if (loading) return <div className="text-center text-white py-10">Chargement des données...</div>
-        if (!userId) return <div className="text-center text-red-400 py-10">Authentification en cours...</div>
+        if (loading || !isAuthReady) return <div className="text-center text-white py-10">Chargement des données...</div>
         switch (view) {
             case 'home': return <Leaderboard players={playersWithStats} isAdmin={isAdmin} onResetRequest={() => setShowResetConfirm(true)} />;
-            case 'players': return <PlayerManagement players={playersWithStats} userId={userId} isAdmin={isAdmin} />;
-            case 'new_game': return <NewGame players={players} onGameEnd={handleGameEnd} userId={userId} />;
+            case 'players': return <PlayerManagement players={playersWithStats} isAdmin={isAdmin} />;
+            case 'new_game': return <NewGame players={players} onGameEnd={handleGameEnd} />;
             case 'history': return <GameHistory games={games} players={players} onEditGame={(game: Game) => setEditingGame(game)} isAdmin={isAdmin} />;
             default: return <Leaderboard players={playersWithStats} isAdmin={isAdmin} onResetRequest={() => setShowResetConfirm(true)} />;
         }
@@ -765,7 +760,6 @@ export default function App() {
                 
                 <footer className="text-center mt-12 text-gray-500 text-sm">
                     <p>Développé avec ❤️ pour les passionnés de poker.</p>
-                    <p>User ID: {userId || "Non connecté"}</p>
                 </footer>
             </div>
         </div>
