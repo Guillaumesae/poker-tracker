@@ -57,6 +57,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin'; // Mot de passe pour les fonctions d'administration
+const APP_VERSION = "1.2.0"; // Numéro de version de l'application
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -415,7 +416,7 @@ const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) 
                 <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg space-y-6">
                     <div>
                         <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Sélectionner les Joueurs</h2>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
                             {players.map(player => (
                                 <div key={player.id} onClick={() => togglePlayerSelection(player.id)} className={`p-3 rounded-lg cursor-pointer transition-all border-2 ${selectedPlayers.includes(player.id) ? 'bg-indigo-600 border-indigo-400' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}>
                                     <div className="flex flex-col items-center text-center">
@@ -767,7 +768,7 @@ export default function App() {
                 <p>Êtes-vous <strong className="text-red-400">ABSOLUMENT</strong> sûr ? Cette action est irréversible et supprimera toutes les données de jeu.</p>
             </ConfirmationModal>
 
-            <div className="container mx-auto p-2 sm:p-4 md:p-6 lg:p-8 max-w-4xl">
+            <div className="container mx-auto p-2 sm:p-4 md:p-6 lg:p-8">
                 <header className="text-center mb-6 sm:mb-8 relative">
                     <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-indigo-400 tracking-tight">Poker Tracker Pro</h1>
                     <p className="text-gray-400 mt-2 text-sm sm:text-base">Suivez vos parties et dominez le classement !</p>
@@ -789,6 +790,7 @@ export default function App() {
                 
                 <footer className="text-center mt-12 text-gray-500 text-sm">
                     <p>Développé avec ❤️ pour les passionnés de poker.</p>
+                    <p>Version {APP_VERSION}</p>
                 </footer>
             </div>
         </div>
