@@ -70,7 +70,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "1.8.2"; 
+const APP_VERSION = "1.9.0"; 
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -331,7 +331,6 @@ const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) 
     const finishGame = async () => {
         const totalPlayers = gameParticipants.length;
         
-        // 1. Gérer les joueurs éliminés
         const eliminatedPlayers = eliminationOrder.map((playerId, index) => {
             const player = gameParticipants.find(p => p.id === playerId);
             return {
@@ -343,7 +342,6 @@ const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) 
             };
         });
 
-        // 2. Gérer les survivants
         const survivors = gameParticipants
             .filter(p => !eliminationOrder.includes(p.id))
             .map(p => ({
@@ -362,7 +360,6 @@ const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) 
             }
         });
         
-        // 3. Combiner et valider
         const allRankedPlayers = [...survivorRankings, ...eliminatedPlayers].sort((a,b) => a.rank - b.rank);
         
         if(allRankedPlayers.length !== totalPlayers){
@@ -445,16 +442,103 @@ const GameHistory: FC<{ games: Game[]; players: Player[]; onEditGame: (game: Gam
     )
 }
 
-const EditGameModal: FC<{ show: boolean; game: Game | null; onClose: () => void }> = ({ show, game, onClose }) => {
-    // TODO: La mise à jour des parties doit être revue pour s'adapter au nouveau système de score.
-    if(!show || !game) return null;
+const EditGameModal: FC<{ show: boolean; game: Game | null; players: Player[]; onClose: () => void; onUpdate: (gameToUpdate: Game, newPlayers: GamePlayer[]) => Promise<void> }> = ({ show, game, players, onClose, onUpdate }) => {
+    const [chipCounts, setChipCounts] = useState<{ [key: string]: string }>({});
+    const [eliminationOrder, setEliminationOrder] = useState<string[]>([]);
+    
+    const gameParticipants = useMemo(() => {
+        if (!game) return [];
+        return players.filter(p => game.players.some(gp => gp.playerId === p.id));
+    }, [game, players]);
+
+    useEffect(() => {
+        if (game) {
+            const initialChips = game.players.reduce((acc, p) => ({ ...acc, [p.playerId]: p.chipCount > 0 ? String(p.chipCount) : '' }), {});
+            const initialElimination = game.players.filter(p => p.chipCount === 0).sort((a, b) => b.rank - a.rank).map(p => p.playerId);
+            setChipCounts(initialChips);
+            setEliminationOrder(initialElimination);
+        }
+    }, [game]);
+
+    if (!show || !game) return null;
+
+    const handleEliminatePlayer = (playerId: string) => {
+        if (!eliminationOrder.includes(playerId)) {
+            setEliminationOrder(prev => [...prev, playerId]);
+        }
+    };
+    
+    const handleChipCountChange = (playerId: string, value: string) => {
+        setChipCounts(prev => ({...prev, [playerId]: value}));
+        if(value && parseInt(value, 10) >= 0) {
+            setEliminationOrder(prev => prev.filter(id => id !== playerId));
+        }
+    }
+    
+    const resetEliminations = () => {
+        setEliminationOrder([]);
+        setChipCounts({});
+    };
+
+    const handleSaveChanges = async () => {
+        const totalPlayers = gameParticipants.length;
+        
+        const eliminatedPlayers = eliminationOrder.map((playerId, index) => {
+            const player = gameParticipants.find(p => p.id === playerId);
+            return {
+                playerId, name: player?.name || 'Inconnu', chipCount: 0,
+                rank: totalPlayers - index, score: (totalPlayers - (totalPlayers - index)) * 10
+            };
+        });
+
+        const survivors = gameParticipants
+            .filter(p => !eliminationOrder.includes(p.id))
+            .map(p => ({ playerId: p.id, name: p.name, chipCount: parseInt(chipCounts[p.id] || "0", 10) }))
+            .sort((a, b) => b.chipCount - a.chipCount);
+        
+        const survivorRankings = survivors.map((survivor, index) => ({ ...survivor, rank: index + 1, score: (totalPlayers - (index + 1)) * 10 }));
+        
+        const allRankedPlayers = [...survivorRankings, ...eliminatedPlayers].sort((a,b) => a.rank - b.rank);
+        
+        if(allRankedPlayers.length !== totalPlayers){
+            alert("Erreur dans le classement, veuillez vérifier les données.");
+            return;
+        }
+
+        await onUpdate(game, allRankedPlayers);
+        onClose();
+    };
+
     return (
          <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
             <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-gray-700">
-                 <h3 className="text-xl font-bold text-white mb-4">Modification de partie</h3>
-                 <p className="text-gray-300">La modification de partie n'est pas encore disponible avec le nouveau système de score.</p>
-                  <div className="flex justify-end gap-4 mt-6">
-                    <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Fermer</button>
+                <h3 className="text-xl font-bold text-white mb-4">Modifier la partie du {formatDate(game.date)}</h3>
+                <div className="space-y-4 my-6">
+                     {gameParticipants.map(player => {
+                        const isEliminated = eliminationOrder.includes(player.id);
+                        const eliminationRank = isEliminated ? gameParticipants.length - eliminationOrder.indexOf(player.id) : null;
+                        return (
+                            <div key={player.id} className="flex items-center gap-4 p-2 rounded-lg bg-gray-700">
+                                <img src={player.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full object-cover"/>
+                                <label className="flex-1 text-white font-medium">{player.name}</label>
+                                {isEliminated ? (
+                                    <span className="text-red-400 font-bold">Sorti en {eliminationRank}ème position</span>
+                                ) : (
+                                    <>
+                                        <input type="number" value={chipCounts[player.id] || ''} onChange={e => handleChipCountChange(player.id, e.target.value)} placeholder="Jetons" className="bg-gray-600 text-white p-2 w-28 rounded-md border border-gray-500"/>
+                                        <button onClick={() => handleEliminatePlayer(player.id)} disabled={!!chipCounts[player.id]} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2 disabled:bg-gray-500 disabled:cursor-not-allowed"><LogOut size={16}/>Éliminer</button>
+                                    </>
+                                )}
+                            </div>
+                        )
+                     })}
+                </div>
+                 <div className="flex justify-between items-center pt-4">
+                    <button onClick={resetEliminations} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2"><RefreshCw size={16}/>Réinitialiser</button>
+                    <div>
+                         <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md mr-2">Annuler</button>
+                         <button onClick={handleSaveChanges} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">Enregistrer</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -660,6 +744,36 @@ export default function App() {
         setView('home');
     };
 
+    const handleGameUpdate = async (gameToUpdate: Game, newPlayers: GamePlayer[]) => {
+        const batch = writeBatch(db);
+        const gameRef = doc(db, `artifacts/${appId}/public/data/games`, gameToUpdate.id);
+    
+        // 1. Calculer la différence de score pour chaque joueur
+        const scoreDiffs: {[key: string]: number} = {};
+        gameToUpdate.players.forEach(oldPlayer => {
+            scoreDiffs[oldPlayer.playerId] = (scoreDiffs[oldPlayer.playerId] || 0) - oldPlayer.score;
+        });
+        newPlayers.forEach(newPlayer => {
+            scoreDiffs[newPlayer.playerId] = (scoreDiffs[newPlayer.playerId] || 0) + newPlayer.score;
+        });
+
+        // 2. Mettre à jour le score total des joueurs
+        for (const playerId in scoreDiffs) {
+            const playerRef = doc(db, `artifacts/${appId}/public/data/players`, playerId);
+            const player = players.find(p => p.id === playerId);
+            if(player) {
+                const newTotalScore = (player.totalScore || 0) + scoreDiffs[playerId];
+                batch.update(playerRef, { totalScore: newTotalScore });
+            }
+        }
+
+        // 3. Mettre à jour la partie elle-même
+        batch.update(gameRef, { players: newPlayers });
+
+        await batch.commit();
+        showAlert("La partie a été mise à jour avec succès !", "success");
+    };
+
     const handleActivateSeason = async (seasonToActivate: Season, currentLeaderboard: PlayerWithStats[]) => {
         const batch = writeBatch(db);
         if(activeSeason) {
@@ -716,7 +830,7 @@ export default function App() {
         <div className="bg-gray-900 text-white min-h-screen font-sans">
              <AlertNotification message={alert.message} show={alert.show} type={alert.type} />
              <AdminLoginModal show={showAdminLogin} onClose={() => setShowAdminLogin(false)} onLogin={handleAdminLogin} />
-             <EditGameModal show={!!editingGame} game={editingGame} onClose={() => setEditingGame(null)}/>
+             <EditGameModal show={!!editingGame} game={editingGame} players={players} onClose={() => setEditingGame(null)} onUpdate={handleGameUpdate} />
              <SeasonInfoModal show={showSeasonInfo} onClose={() => setShowSeasonInfo(false)} season={activeSeason}/>
              <ConfirmationModal show={!!seasonToDelete} onClose={() => setSeasonToDelete(null)} onConfirm={confirmDeleteSeason} title="Supprimer la Saison ?" confirmText="Supprimer" confirmColor="red">
                 <p>Êtes-vous sûr de vouloir supprimer la saison <strong>{seasonToDelete?.name}</strong>? Cette action est irréversible et ne peut pas être annulée.</p>
