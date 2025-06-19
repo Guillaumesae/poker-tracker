@@ -113,9 +113,9 @@ const AlertNotification: FC<{ message: string; show: boolean; type?: 'info' | 'e
         info: 'bg-yellow-500 text-gray-900',
         error: 'bg-red-500 text-white',
         success: 'bg-green-500 text-white',
-    }
+    };
     return (
-        <div className={`fixed top-5 right-5 md:top-20 md:right-5 font-semibold py-3 px-5 rounded-lg shadow-lg z-50 animate-pulse`}>
+        <div className={`fixed top-5 right-5 md:top-20 md:right-5 font-semibold py-3 px-5 rounded-lg shadow-lg z-50 animate-pulse ${colors[type]}`}>
             <p>{message}</p>
         </div>
     );
