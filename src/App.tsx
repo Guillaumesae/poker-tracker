@@ -70,7 +70,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "1.9.0"; 
+const APP_VERSION = "1.10.0"; 
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -79,9 +79,13 @@ const db: Firestore = getFirestore(app);
 const appId = 'default-poker-app'; 
 
 // --- Fonctions Utilitaires ---
-const formatDate = (timestamp: Timestamp | undefined) => {
-    if (!timestamp) return 'Date inconnue';
-    return new Date(timestamp.seconds * 1000).toLocaleDateString('fr-FR', {
+const formatDate = (timestamp: Timestamp | undefined, format: 'long' | 'short' = 'long') => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp.seconds * 1000);
+    if(format === 'short') {
+        return date.toISOString().split('T')[0];
+    }
+    return date.toLocaleDateString('fr-FR', {
         year: 'numeric', month: 'long', day: 'numeric'
     });
 }
@@ -563,7 +567,7 @@ const AdminLoginModal: FC<{ show: boolean; onClose: () => void; onLogin: (passwo
     );
 };
 
-const SeasonManagement: FC<{ seasons: Season[]; playersWithStats: PlayerWithStats[], onActivateSeason: (seasonToActivate: Season, currentLeaderboard: PlayerWithStats[]) => Promise<void> }> = ({ seasons, playersWithStats, onActivateSeason }) => {
+const SeasonManagement: FC<{ seasons: Season[]; playersWithStats: PlayerWithStats[], onActivateSeason: (seasonToActivate: Season, currentLeaderboard: PlayerWithStats[]) => Promise<void>, onEditSeason: (season: Season) => void }> = ({ seasons, playersWithStats, onActivateSeason, onEditSeason }) => {
     const [name, setName] = useState('');
     const [imageUrl, setImageUrl] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -602,11 +606,53 @@ const SeasonManagement: FC<{ seasons: Season[]; playersWithStats: PlayerWithStat
                        </div>
                        <div className="mt-4 sm:mt-0 flex items-center gap-2">
                            {season.isActive && <span className="flex items-center gap-2 text-green-400 font-bold bg-green-900/50 px-3 py-1 rounded-full"><PlayCircle size={16}/>Active</span>}
+                           {season.isActive && <button onClick={() => onEditSeason(season)} className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-full"><Pencil size={16}/></button>}
                            {season.isClosed && <span className="flex items-center gap-2 text-red-400 font-bold bg-red-900/50 px-3 py-1 rounded-full"><Archive size={16}/>Fermée</span>}
                            {!season.isActive && !season.isClosed && <button onClick={() => onActivateSeason(season, playersWithStats)} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-md">Activer</button>}
                        </div>
                     </div>
                 ))}
+            </div>
+        </div>
+    );
+};
+
+const EditSeasonModal: FC<{ show: boolean; onClose: () => void; season: Season | null; onUpdate: (seasonId: string, data: { name: string; imageUrl: string; endDate: string; prize: string }) => void; }> = ({ show, onClose, season, onUpdate }) => {
+    const [name, setName] = useState('');
+    const [imageUrl, setImageUrl] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [prize, setPrize] = useState('');
+
+    useEffect(() => {
+        if(season) {
+            setName(season.name);
+            setImageUrl(season.imageUrl || '');
+            setEndDate(formatDate(season.endDate, 'short'));
+            setPrize(season.prize);
+        }
+    }, [season]);
+    
+    if (!show || !season) return null;
+
+    const handleSave = () => {
+        if (!name.trim() || !endDate) return;
+        onUpdate(season.id, { name, imageUrl, endDate, prize });
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
+            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-gray-700">
+                <h3 className="text-xl font-bold text-white mb-4">Éditer la saison</h3>
+                <div className="space-y-4 my-6">
+                     <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Nom de la saison" className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600"/>
+                     <input type="text" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="URL de l'image (optionnel)" className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600"/>
+                     <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600"/>
+                     <input type="text" value={prize} onChange={e => setPrize(e.target.value)} placeholder="Lot à gagner (optionnel)" className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600"/>
+                </div>
+                <div className="flex justify-end gap-4">
+                    <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Annuler</button>
+                    <button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-md">Enregistrer</button>
+                </div>
             </div>
         </div>
     );
@@ -668,6 +714,7 @@ export default function App() {
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [loading, setLoading] = useState(true);
     const [editingGame, setEditingGame] = useState<Game | null>(null);
+    const [editingSeason, setEditingSeason] = useState<Season | null>(null);
     const [isAdmin, setIsAdmin] = useState(false);
     const [showAdminLogin, setShowAdminLogin] = useState(false);
     const [showSeasonInfo, setShowSeasonInfo] = useState(false);
@@ -748,7 +795,6 @@ export default function App() {
         const batch = writeBatch(db);
         const gameRef = doc(db, `artifacts/${appId}/public/data/games`, gameToUpdate.id);
     
-        // 1. Calculer la différence de score pour chaque joueur
         const scoreDiffs: {[key: string]: number} = {};
         gameToUpdate.players.forEach(oldPlayer => {
             scoreDiffs[oldPlayer.playerId] = (scoreDiffs[oldPlayer.playerId] || 0) - oldPlayer.score;
@@ -757,7 +803,6 @@ export default function App() {
             scoreDiffs[newPlayer.playerId] = (scoreDiffs[newPlayer.playerId] || 0) + newPlayer.score;
         });
 
-        // 2. Mettre à jour le score total des joueurs
         for (const playerId in scoreDiffs) {
             const playerRef = doc(db, `artifacts/${appId}/public/data/players`, playerId);
             const player = players.find(p => p.id === playerId);
@@ -767,7 +812,6 @@ export default function App() {
             }
         }
 
-        // 3. Mettre à jour la partie elle-même
         batch.update(gameRef, { players: newPlayers });
 
         await batch.commit();
@@ -794,6 +838,18 @@ export default function App() {
         showAlert(`La saison "${seasonToActivate.name}" est maintenant active !`, "success");
         setView('home');
     }
+    
+    const handleUpdateSeason = async (seasonId: string, updatedData: { name: string; imageUrl: string; endDate: string; prize: string }) => {
+        const seasonRef = doc(db, `artifacts/${appId}/public/data/seasons`, seasonId);
+        await updateDoc(seasonRef, {
+            name: updatedData.name,
+            imageUrl: updatedData.imageUrl,
+            endDate: Timestamp.fromDate(new Date(updatedData.endDate)),
+            prize: updatedData.prize,
+        });
+        showAlert("Saison mise à jour avec succès !", "success");
+        setEditingSeason(null);
+    };
 
     const handleDeleteSeason = (seasonId: string) => {
         const season = seasons.find(s => s.id === seasonId);
@@ -820,7 +876,7 @@ export default function App() {
             case 'players': return <PlayerManagement players={playersWithStats} isAdmin={isAdmin} />;
             case 'new_game': return <NewGame players={players} onGameEnd={handleGameEnd} activeSeason={activeSeason} />;
             case 'history': return <GameHistory games={gamesOfActiveSeason} players={players} onEditGame={(game: Game) => setEditingGame(game)} isAdmin={isAdmin} />;
-            case 'seasons': return <SeasonManagement seasons={seasons} playersWithStats={playersWithStats} onActivateSeason={handleActivateSeason} />;
+            case 'seasons': return <SeasonManagement seasons={seasons} playersWithStats={playersWithStats} onActivateSeason={handleActivateSeason} onEditSeason={setEditingSeason} />;
             case 'past_seasons': return <PastSeasons seasons={seasons} isAdmin={isAdmin} onDeleteSeason={handleDeleteSeason} />;
             default: return <Leaderboard players={playersWithStats} />;
         }
@@ -832,6 +888,7 @@ export default function App() {
              <AdminLoginModal show={showAdminLogin} onClose={() => setShowAdminLogin(false)} onLogin={handleAdminLogin} />
              <EditGameModal show={!!editingGame} game={editingGame} players={players} onClose={() => setEditingGame(null)} onUpdate={handleGameUpdate} />
              <SeasonInfoModal show={showSeasonInfo} onClose={() => setShowSeasonInfo(false)} season={activeSeason}/>
+             <EditSeasonModal show={!!editingSeason} season={editingSeason} onClose={() => setEditingSeason(null)} onUpdate={handleUpdateSeason} />
              <ConfirmationModal show={!!seasonToDelete} onClose={() => setSeasonToDelete(null)} onConfirm={confirmDeleteSeason} title="Supprimer la Saison ?" confirmText="Supprimer" confirmColor="red">
                 <p>Êtes-vous sûr de vouloir supprimer la saison <strong>{seasonToDelete?.name}</strong>? Cette action est irréversible et ne peut pas être annulée.</p>
             </ConfirmationModal>
