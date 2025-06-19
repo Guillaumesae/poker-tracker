@@ -70,7 +70,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "1.8.1"; 
+const APP_VERSION = "1.8.2"; 
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -445,7 +445,7 @@ const GameHistory: FC<{ games: Game[]; players: Player[]; onEditGame: (game: Gam
     )
 }
 
-const EditGameModal: FC<{ show: boolean; game: Game | null; players: Player[]; onClose: () => void }> = ({ show, game, players, onClose }) => {
+const EditGameModal: FC<{ show: boolean; game: Game | null; onClose: () => void }> = ({ show, game, onClose }) => {
     // TODO: La mise à jour des parties doit être revue pour s'adapter au nouveau système de score.
     if(!show || !game) return null;
     return (
@@ -612,7 +612,7 @@ export default function App() {
         return () => { unsubPlayers(); unsubGames(); unsubSeasons(); };
     }, [isAuthReady]);
 
-    const activeSeason = useMemo(() => seasons.find(s => s.isActive), [seasons]);
+    const activeSeason = useMemo(() => seasons.find(s => s.isActive) || null, [seasons]);
     const gamesOfActiveSeason = useMemo(() => {
         if (!activeSeason) return [];
         return games.filter(g => g.seasonId === activeSeason.id);
@@ -658,10 +658,6 @@ export default function App() {
         await batch.commit();
         showAlert("La partie a été enregistrée !", "success");
         setView('home');
-    };
-
-    const handleGameUpdate = async () => {
-        showAlert("La modification de partie n'est pas encore supportée avec le nouveau système de score.", "error");
     };
 
     const handleActivateSeason = async (seasonToActivate: Season, currentLeaderboard: PlayerWithStats[]) => {
@@ -720,7 +716,7 @@ export default function App() {
         <div className="bg-gray-900 text-white min-h-screen font-sans">
              <AlertNotification message={alert.message} show={alert.show} type={alert.type} />
              <AdminLoginModal show={showAdminLogin} onClose={() => setShowAdminLogin(false)} onLogin={handleAdminLogin} />
-             <EditGameModal show={!!editingGame} game={editingGame} players={players} onClose={() => setEditingGame(null)}/>
+             <EditGameModal show={!!editingGame} game={editingGame} onClose={() => setEditingGame(null)}/>
              <SeasonInfoModal show={showSeasonInfo} onClose={() => setShowSeasonInfo(false)} season={activeSeason}/>
              <ConfirmationModal show={!!seasonToDelete} onClose={() => setSeasonToDelete(null)} onConfirm={confirmDeleteSeason} title="Supprimer la Saison ?" confirmText="Supprimer" confirmColor="red">
                 <p>Êtes-vous sûr de vouloir supprimer la saison <strong>{seasonToDelete?.name}</strong>? Cette action est irréversible et ne peut pas être annulée.</p>
