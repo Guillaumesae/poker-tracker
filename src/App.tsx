@@ -17,7 +17,7 @@ import {
     Timestamp 
 } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
-import { Lock, Unlock, PlusCircle, Trash2, Crown, Users, Trophy, Gamepad2, History, Pencil, ShieldAlert, LayoutGrid, Info, PlayCircle, Archive, ArchiveRestore, RefreshCw, LogOut } from 'lucide-react';
+import { Lock, Unlock, PlusCircle, Trash2, Crown, Users, Trophy, Gamepad2, History, Pencil, LayoutGrid, Info, PlayCircle, Archive, ArchiveRestore, RefreshCw, LogOut } from 'lucide-react';
 
 // --- Types TypeScript ---
 interface Player {
@@ -70,7 +70,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "1.8.0"; 
+const APP_VERSION = "1.8.1"; 
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -318,18 +318,19 @@ const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) 
     
     const handleChipCountChange = (playerId: string, value: string) => {
         setChipCounts(prev => ({...prev, [playerId]: value}));
-        // Si on saisit des jetons, le joueur ne peut plus être éliminé
-        if(value && parseInt(value, 10) > 0) {
+        if(value && parseInt(value, 10) >= 0) {
             setEliminationOrder(prev => prev.filter(id => id !== playerId));
         }
     }
 
-    const resetEliminations = () => setEliminationOrder([]);
+    const resetEliminations = () => {
+        setEliminationOrder([]);
+        setChipCounts({});
+    };
 
     const finishGame = async () => {
         const totalPlayers = gameParticipants.length;
-        const finalRanking: GamePlayer[] = [];
-
+        
         // 1. Gérer les joueurs éliminés
         const eliminatedPlayers = eliminationOrder.map((playerId, index) => {
             const player = gameParticipants.find(p => p.id === playerId);
@@ -365,7 +366,6 @@ const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) 
         const allRankedPlayers = [...survivorRankings, ...eliminatedPlayers].sort((a,b) => a.rank - b.rank);
         
         if(allRankedPlayers.length !== totalPlayers){
-            // Idéalement, utiliser AlertNotification
             alert("Erreur dans le classement, veuillez vérifier les données.");
             return;
         }
@@ -423,7 +423,7 @@ const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) 
     );
 }
 
-const Leaderboard: FC<{ players: PlayerWithStats[]; isAdmin: boolean }> = ({ players, isAdmin }) => {
+const Leaderboard: FC<{ players: PlayerWithStats[]}> = ({ players }) => {
      const sortedPlayers = [...players].sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
     return (
         <div className="space-y-4">
@@ -445,9 +445,20 @@ const GameHistory: FC<{ games: Game[]; players: Player[]; onEditGame: (game: Gam
     )
 }
 
-const EditGameModal: FC<{ show: boolean; game: Game | null; players: Player[]; onUpdate: (game: Game, chipCounts: {[key: string]: string}) => void; onClose: () => void }> = ({ show, game, players, onUpdate, onClose }) => {
+const EditGameModal: FC<{ show: boolean; game: Game | null; players: Player[]; onClose: () => void }> = ({ show, game, players, onClose }) => {
     // TODO: La mise à jour des parties doit être revue pour s'adapter au nouveau système de score.
-    return null; 
+    if(!show || !game) return null;
+    return (
+         <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
+            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-gray-700">
+                 <h3 className="text-xl font-bold text-white mb-4">Modification de partie</h3>
+                 <p className="text-gray-300">La modification de partie n'est pas encore disponible avec le nouveau système de score.</p>
+                  <div className="flex justify-end gap-4 mt-6">
+                    <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Fermer</button>
+                </div>
+            </div>
+        </div>
+    ); 
 }
 
 const AdminLoginModal: FC<{ show: boolean; onClose: () => void; onLogin: (password: string) => void }> = ({ show, onClose, onLogin }) => {
@@ -649,15 +660,17 @@ export default function App() {
         setView('home');
     };
 
-    // TODO: La logique de mise à jour des parties doit être entièrement revue
-    const handleGameUpdate = async (gameToUpdate: Game, newChipCounts: {[key: string]: string}) => {
+    const handleGameUpdate = async () => {
         showAlert("La modification de partie n'est pas encore supportée avec le nouveau système de score.", "error");
     };
 
     const handleActivateSeason = async (seasonToActivate: Season, currentLeaderboard: PlayerWithStats[]) => {
         const batch = writeBatch(db);
         if(activeSeason) {
-            const finalLeaderboardData = currentLeaderboard.map((p, index) => ({...p, rank: index + 1}));
+            const finalLeaderboardData = currentLeaderboard.map((p, index) => {
+                const {id, name, imageUrl, totalScore, gamesPlayed, wins} = p;
+                return {id, name, imageUrl, totalScore, gamesPlayed, wins, rank: index + 1};
+            });
             const oldSeasonRef = doc(db, `artifacts/${appId}/public/data/seasons`, activeSeason.id);
             batch.update(oldSeasonRef, { isActive: false, isClosed: true, finalLeaderboard: finalLeaderboardData });
         }
@@ -672,7 +685,7 @@ export default function App() {
         setView('home');
     }
 
-    const handleDeleteSeason = async (seasonId: string) => {
+    const handleDeleteSeason = (seasonId: string) => {
         const season = seasons.find(s => s.id === seasonId);
         if(!season) return;
         setSeasonToDelete(season);
@@ -693,13 +706,13 @@ export default function App() {
     const renderView = () => {
         if (loading || !isAuthReady) return <div className="text-center text-white py-10">Chargement des données...</div>
         switch (view) {
-            case 'home': return <Leaderboard players={playersWithStats} isAdmin={isAdmin} />;
+            case 'home': return <Leaderboard players={playersWithStats} />;
             case 'players': return <PlayerManagement players={playersWithStats} isAdmin={isAdmin} />;
             case 'new_game': return <NewGame players={players} onGameEnd={handleGameEnd} activeSeason={activeSeason} />;
             case 'history': return <GameHistory games={gamesOfActiveSeason} players={players} onEditGame={(game: Game) => setEditingGame(game)} isAdmin={isAdmin} />;
             case 'seasons': return <SeasonManagement seasons={seasons} playersWithStats={playersWithStats} onActivateSeason={handleActivateSeason} />;
             case 'past_seasons': return <PastSeasons seasons={seasons} isAdmin={isAdmin} onDeleteSeason={handleDeleteSeason} />;
-            default: return <Leaderboard players={playersWithStats} isAdmin={isAdmin} />;
+            default: return <Leaderboard players={playersWithStats} />;
         }
     };
     
@@ -707,8 +720,8 @@ export default function App() {
         <div className="bg-gray-900 text-white min-h-screen font-sans">
              <AlertNotification message={alert.message} show={alert.show} type={alert.type} />
              <AdminLoginModal show={showAdminLogin} onClose={() => setShowAdminLogin(false)} onLogin={handleAdminLogin} />
-             <EditGameModal show={!!editingGame} game={editingGame} players={players} onUpdate={handleGameUpdate} onClose={() => setEditingGame(null)}/>
-             <SeasonInfoModal show={showSeasonInfo} onClose={() => setShowSeasonInfo(false)} season={activeSeason || null}/>
+             <EditGameModal show={!!editingGame} game={editingGame} players={players} onClose={() => setEditingGame(null)}/>
+             <SeasonInfoModal show={showSeasonInfo} onClose={() => setShowSeasonInfo(false)} season={activeSeason}/>
              <ConfirmationModal show={!!seasonToDelete} onClose={() => setSeasonToDelete(null)} onConfirm={confirmDeleteSeason} title="Supprimer la Saison ?" confirmText="Supprimer" confirmColor="red">
                 <p>Êtes-vous sûr de vouloir supprimer la saison <strong>{seasonToDelete?.name}</strong>? Cette action est irréversible et ne peut pas être annulée.</p>
             </ConfirmationModal>
