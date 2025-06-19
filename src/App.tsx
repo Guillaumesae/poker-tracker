@@ -57,7 +57,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin'; // Mot de passe pour les fonctions d'administration
-const APP_VERSION = "1.2.0"; // Numéro de version de l'application
+const APP_VERSION = "1.2.1"; // Numéro de version de l'application
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -768,7 +768,7 @@ export default function App() {
                 <p>Êtes-vous <strong className="text-red-400">ABSOLUMENT</strong> sûr ? Cette action est irréversible et supprimera toutes les données de jeu.</p>
             </ConfirmationModal>
 
-            <div className="container mx-auto p-2 sm:p-4 md:p-6 lg:p-8">
+            <div className="w-full p-2 sm:p-4 md:p-6 lg:p-8">
                 <header className="text-center mb-6 sm:mb-8 relative">
                     <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-indigo-400 tracking-tight">Poker Tracker Pro</h1>
                     <p className="text-gray-400 mt-2 text-sm sm:text-base">Suivez vos parties et dominez le classement !</p>
