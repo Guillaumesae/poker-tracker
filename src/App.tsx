@@ -22,7 +22,7 @@ import {
     setLogLevel // DEBUG: Added for better debugging
 } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
-import { Lock, Unlock, PlusCircle, Trash2, Crown, Users, Trophy, Gamepad2, History, Pencil, LayoutGrid, Info, PlayCircle, Archive, ArchiveRestore, RefreshCw, LogOut, Newspaper, Medal, AlertTriangle } from 'lucide-react';
+import { Lock, Unlock, PlusCircle, Trash2, Crown, Users, Trophy, Gamepad2, History, Pencil, LayoutGrid, Info, PlayCircle, Archive, ArchiveRestore, RefreshCw, LogOut, Newspaper, Medal, AlertTriangle, BarChart2, Bomb } from 'lucide-react';
 
 // --- Types TypeScript ---
 interface Player {
@@ -100,7 +100,7 @@ const achievementsList: Achievement[] = [
         id: 'conqueror',
         name: 'Le Conquérant',
         description: 'Être le joueur avec le plus de victoires (1ère place) durant la saison en cours.',
-        emoji: '�',
+        emoji: '👑',
         type: 'saisonnier',
         newsPhrase: (playerName) => `👑 ${playerName} s'empare du titre de Conquérant de la saison avec le plus de victoires !`
     },
@@ -126,7 +126,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "2.3.0"; // Version bump
+const APP_VERSION = "2.4.0"; // Version bump
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -799,32 +799,38 @@ const PlayerProfile: FC<{ player: Player, allGames: Game[], playerAchievements: 
         return achievementsList.filter(ach => playerAchievements.some(pa => pa.playerId === player.id && pa.achievementId === ach.id));
     }, [player, playerAchievements]);
 
+    // UI IMPROVEMENT: Stat Card component for better visual separation.
+    const StatCard: FC<{icon: React.ElementType, emoji: string, value: string | number, label: string, colorClass: string}> = ({ icon, emoji, value, label, colorClass }) => {
+        const Icon = icon;
+        return (
+            <div className="bg-gray-700 p-4 rounded-lg flex items-center gap-4">
+                <div className={`p-3 rounded-lg ${colorClass}`}>
+                    <Icon size={28} className="text-white" />
+                </div>
+                <div>
+                    <p className="text-2xl font-bold text-white">{value} <span className="text-xl">{emoji}</span></p>
+                    <p className="text-sm text-gray-400">{label}</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-            <div className="flex flex-col sm:flex-row items-center gap-6">
+            <div className="flex flex-col sm:flex-row items-center gap-6 mb-8">
                 <img src={player.imageUrl || `https://placehold.co/150x150/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-36 h-36 rounded-full border-4 border-indigo-500 object-cover"/>
                 <div className="text-center sm:text-left">
                     <h2 className="text-3xl font-bold text-white">{player.name}</h2>
+                    <p className="text-indigo-400">Statistiques globales</p>
                 </div>
             </div>
-
-            <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                <div className="bg-gray-700 p-4 rounded-lg">
-                    <p className="text-2xl font-bold text-indigo-400">{globalStats.totalGamesPlayed}</p>
-                    <p className="text-sm text-gray-400">Parties Jouées</p>
-                </div>
-                 <div className="bg-gray-700 p-4 rounded-lg">
-                    <p className="text-2xl font-bold text-indigo-400">{globalStats.totalWins}</p>
-                    <p className="text-sm text-gray-400">Victoires</p>
-                </div>
-                 <div className="bg-gray-700 p-4 rounded-lg">
-                    <p className="text-2xl font-bold text-indigo-400">{globalStats.averageRank}</p>
-                    <p className="text-sm text-gray-400">Classement Moyen</p>
-                </div>
-                 <div className="bg-gray-700 p-4 rounded-lg">
-                    <p className="text-2xl font-bold text-indigo-400">{globalStats.lastPlaceCount}</p>
-                    <p className="text-sm text-gray-400">Dernières Places</p>
-                </div>
+            
+            {/* UI IMPROVEMENT: Revamped stats section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <StatCard icon={Gamepad2} emoji="🎮" value={globalStats.totalGamesPlayed} label="Parties Jouées" colorClass="bg-blue-500" />
+                <StatCard icon={Trophy} emoji="🏆" value={globalStats.totalWins} label="Victoires" colorClass="bg-yellow-500" />
+                <StatCard icon={BarChart2} emoji="📊" value={globalStats.averageRank} label="Classement Moyen" colorClass="bg-green-500" />
+                <StatCard icon={Bomb} emoji="😥" value={globalStats.lastPlaceCount} label="Dernières Places" colorClass="bg-red-500" />
             </div>
 
             <div className="mt-8">
@@ -993,21 +999,22 @@ export default function App() {
     };
     const handleAdminLogout = () => { setIsAdmin(false); showAlert("Mode administrateur désactivé"); };
     
-    // IMPROVEMENT: Passing allGames avoids a costly re-fetch inside the function.
-    const checkAchievements = async (newGame: Game, participants: Player[], allGames: Game[]) => {
+    // FIX: Reworked the achievement logic to be more robust and complete.
+    const checkAchievements = async (newGame: Game, participants: Player[], allGames: Game[], currentActiveSeason: Season | null) => {
+        if (!currentActiveSeason) return;
+
         const batch = writeBatch(db);
         const newsCollection = collection(db, `artifacts/${appId}/public/data/news_feed`);
         const playerAchievementsCollection = collection(db, `artifacts/${appId}/public/data/player_achievements`);
 
-        // Add the just-played game to the list for accurate counting
-        const currentGames = [...allGames, newGame];
+        const allGamesWithNewOne = [...allGames, newGame];
 
-        // --- Veteran Achievement Check ---
+        // --- Permanent Achievements ---
         const veteranAchievement = achievementsList.find(a => a.id === 'veteran')!;
         for(const player of participants) {
             const hasVeteran = playerAchievements.some(pa => pa.playerId === player.id && pa.achievementId === 'veteran');
             if(!hasVeteran) {
-                const totalGamesPlayed = currentGames.filter(g => g.players.some(p => p.playerId === player.id)).length;
+                const totalGamesPlayed = allGamesWithNewOne.filter(g => g.players.some(p => p.playerId === player.id)).length;
                 if(totalGamesPlayed >= 10) {
                     const newAchievementRef = doc(playerAchievementsCollection);
                     batch.set(newAchievementRef, { playerId: player.id, achievementId: 'veteran', unlockedAt: Timestamp.now() });
@@ -1016,10 +1023,56 @@ export default function App() {
                 }
             }
         }
-        
-        // TODO: Implement seasonal achievement checks (Conqueror, Red Lantern) here.
-        // This would involve finding the current leader for wins/losses and checking if it has changed.
 
+        // --- Seasonal Achievements ---
+        const seasonalAchievements = achievementsList.filter(a => a.type === 'saisonnier');
+        const seasonGames = allGamesWithNewOne.filter(g => g.seasonId === currentActiveSeason.id);
+
+        for(const achievement of seasonalAchievements) {
+            const playerStats: { [playerId: string]: number } = {};
+            participants.forEach(p => playerStats[p.id] = 0);
+
+            if (achievement.id === 'conqueror') {
+                seasonGames.forEach(g => {
+                    const winner = g.players.find(p => p.rank === 1);
+                    if(winner && playerStats.hasOwnProperty(winner.playerId)) {
+                        playerStats[winner.playerId]++;
+                    }
+                });
+            } else if (achievement.id === 'red_lantern') {
+                seasonGames.forEach(g => {
+                    const loser = g.players.find(p => p.rank === g.players.length);
+                    if(loser && playerStats.hasOwnProperty(loser.playerId)) {
+                        playerStats[loser.playerId]++;
+                    }
+                });
+            }
+            
+            const maxStat = Math.max(...Object.values(playerStats));
+            if (maxStat === 0) continue; // No one has met the criteria yet
+
+            const newLeaders = Object.keys(playerStats).filter(id => playerStats[id] === maxStat);
+            const oldLeaders = playerAchievements.filter(pa => pa.achievementId === achievement.id).map(pa => pa.playerId);
+            
+            const leadersChanged = newLeaders.length !== oldLeaders.length || newLeaders.some(id => !oldLeaders.includes(id));
+
+            if (leadersChanged) {
+                // Revoke from old leaders
+                playerAchievements.filter(pa => pa.achievementId === achievement.id).forEach(ach => {
+                    batch.delete(doc(db, `artifacts/${appId}/public/data/player_achievements`, ach.id));
+                });
+                
+                // Grant to new leaders
+                for (const leaderId of newLeaders) {
+                    const leaderName = players.find(p => p.id === leaderId)?.name || 'Un joueur';
+                    const newAchievementRef = doc(playerAchievementsCollection);
+                    batch.set(newAchievementRef, { playerId: leaderId, achievementId: achievement.id, unlockedAt: Timestamp.now() });
+                    const newNewsRef = doc(newsCollection);
+                    batch.set(newNewsRef, { text: achievement.newsPhrase(leaderName), createdAt: Timestamp.now() });
+                }
+            }
+        }
+        
         await batch.commit();
     };
 
@@ -1038,8 +1091,7 @@ export default function App() {
         showAlert("La partie a été enregistrée !", "success");
         setView('news');
 
-        // IMPROVEMENT: Pass the full 'games' state to avoid a re-fetch.
-        await checkAchievements({id: newGameRef.id, ...newGameData, date: Timestamp.fromDate(newGameData.date)}, participants, games);
+        await checkAchievements({id: newGameRef.id, ...newGameData, date: Timestamp.fromDate(newGameData.date)}, participants, games, activeSeason);
     };
 
     const handleGameUpdate = async (gameToUpdate: Game, newPlayers: GamePlayer[]) => {
