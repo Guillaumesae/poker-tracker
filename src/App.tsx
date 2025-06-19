@@ -57,7 +57,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin'; // Mot de passe pour les fonctions d'administration
-const APP_VERSION = "1.2.1"; // Numéro de version de l'application
+const APP_VERSION = "1.3.0"; // Numéro de version de l'application
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -759,40 +759,53 @@ export default function App() {
     };
     
     return (
-        <div className="bg-gray-900 text-white min-h-screen font-sans">
-             <AlertNotification message={alert.message} show={alert.show} type={alert.type} />
-             <AdminLoginModal show={showAdminLogin} onClose={() => setShowAdminLogin(false)} onLogin={handleAdminLogin} />
-             <EditGameModal show={!!editingGame} game={editingGame} players={players} onUpdate={handleGameUpdate} onClose={() => setEditingGame(null)}/>
-             <ConfirmationModal show={showResetConfirm} onClose={() => setShowResetConfirm(false)} onConfirm={handleResetScores} title="Réinitialiser tous les scores ?">
-                 <p className="text-center text-lg italic mb-4">"Un grand pouvoir implique de grandes responsabilités !"</p>
-                <p>Êtes-vous <strong className="text-red-400">ABSOLUMENT</strong> sûr ? Cette action est irréversible et supprimera toutes les données de jeu.</p>
-            </ConfirmationModal>
+        <>
+            {/* FIX ROBUSTE POUR LA PLEINE LARGEUR:
+                Le style ci-dessous est ajouté pour forcer l'application à prendre toute la largeur.
+                Idéalement, la modification devrait être faite dans votre fichier CSS global (ex: src/index.css)
+                en retirant la propriété `max-width` sur l'élément #root.
+            */}
+            <style>{`
+              #root {
+                max-width: none;
+                padding: 0;
+              }
+            `}</style>
+            <div className="bg-gray-900 text-white min-h-screen font-sans">
+                 <AlertNotification message={alert.message} show={alert.show} type={alert.type} />
+                 <AdminLoginModal show={showAdminLogin} onClose={() => setShowAdminLogin(false)} onLogin={handleAdminLogin} />
+                 <EditGameModal show={!!editingGame} game={editingGame} players={players} onUpdate={handleGameUpdate} onClose={() => setEditingGame(null)}/>
+                 <ConfirmationModal show={showResetConfirm} onClose={() => setShowResetConfirm(false)} onConfirm={handleResetScores} title="Réinitialiser tous les scores ?">
+                     <p className="text-center text-lg italic mb-4">"Un grand pouvoir implique de grandes responsabilités !"</p>
+                    <p>Êtes-vous <strong className="text-red-400">ABSOLUMENT</strong> sûr ? Cette action est irréversible et supprimera toutes les données de jeu.</p>
+                </ConfirmationModal>
 
-            <div className="w-full p-2 sm:p-4 md:p-6 lg:p-8">
-                <header className="text-center mb-6 sm:mb-8 relative">
-                    <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-indigo-400 tracking-tight">Poker Tracker Pro</h1>
-                    <p className="text-gray-400 mt-2 text-sm sm:text-base">Suivez vos parties et dominez le classement !</p>
-                    <div className="absolute top-0 right-0">
-                        <button onClick={isAdmin ? handleAdminLogout : () => setShowAdminLogin(true)} className="p-2 rounded-full text-gray-400 hover:text-white hover:bg-gray-700 transition-colors">
-                            {isAdmin ? <Unlock /> : <Lock />}
-                        </button>
-                    </div>
-                </header>
+                <div className="w-full mx-auto p-4 md:p-6 lg:p-8">
+                    <header className="text-center mb-6 sm:mb-8 relative">
+                        <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-indigo-400 tracking-tight">Poker Tracker Pro</h1>
+                        <p className="text-gray-400 mt-2 text-sm sm:text-base">Suivez vos parties et dominez le classement !</p>
+                        <div className="absolute top-0 right-0">
+                            <button onClick={isAdmin ? handleAdminLogout : () => setShowAdminLogin(true)} className="p-2 rounded-full text-gray-400 hover:text-white hover:bg-gray-700 transition-colors">
+                                {isAdmin ? <Unlock /> : <Lock />}
+                            </button>
+                        </div>
+                    </header>
 
-                <nav className="flex flex-wrap gap-2 mb-6 sm:mb-8">
-                    <NavButton targetView="home" icon={Trophy} label="Classement" />
-                    <NavButton targetView="players" icon={Users} label="Joueurs" />
-                    <NavButton targetView="new_game" icon={Gamepad2} label="Nouvelle Partie" />
-                    <NavButton targetView="history" icon={History} label="Historique" />
-                </nav>
+                    <nav className="flex flex-wrap gap-2 mb-6 sm:mb-8">
+                        <NavButton targetView="home" icon={Trophy} label="Classement" />
+                        <NavButton targetView="players" icon={Users} label="Joueurs" />
+                        <NavButton targetView="new_game" icon={Gamepad2} label="Nouvelle Partie" />
+                        <NavButton targetView="history" icon={History} label="Historique" />
+                    </nav>
 
-                <main>{renderView()}</main>
-                
-                <footer className="text-center mt-12 text-gray-500 text-sm">
-                    <p>Développé avec ❤️ pour les passionnés de poker.</p>
-                    <p>Version {APP_VERSION}</p>
-                </footer>
+                    <main>{renderView()}</main>
+                    
+                    <footer className="text-center mt-12 text-gray-500 text-sm">
+                        <p>Développé avec ❤️ pour les passionnés de poker.</p>
+                        <p>Version {APP_VERSION}</p>
+                    </footer>
+                </div>
             </div>
-        </div>
+        </>
     );
 }
