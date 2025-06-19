@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { FC } from 'react';
+// IMPROVEMENT: Using modern firebase/ modular imports
 import { initializeApp } from 'firebase/app';
 import type { FirebaseApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -14,10 +15,14 @@ import {
     deleteDoc, 
     updateDoc, 
     writeBatch,
-    Timestamp 
+    Timestamp,
+    orderBy,
+    limit,
+    getDocs,
+    setLogLevel // DEBUG: Added for better debugging
 } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
-import { Lock, Unlock, PlusCircle, Trash2, Crown, Users, Trophy, Gamepad2, History, Pencil, LayoutGrid, Info, PlayCircle, Archive, ArchiveRestore, RefreshCw, LogOut } from 'lucide-react';
+import { Lock, Unlock, PlusCircle, Trash2, Crown, Users, Trophy, Gamepad2, History, Pencil, LayoutGrid, Info, PlayCircle, Archive, ArchiveRestore, RefreshCw, LogOut, Newspaper, Medal, AlertTriangle } from 'lucide-react';
 
 // --- Types TypeScript ---
 interface Player {
@@ -59,8 +64,59 @@ interface Season {
     finalLeaderboard?: PlayerWithStats[];
 }
 
+interface Achievement {
+    id: string;
+    name: string;
+    description: string;
+    emoji: string;
+    type: 'permanent' | 'saisonnier';
+    newsPhrase: (playerName: string) => string;
+}
+
+interface PlayerAchievement {
+    id: string;
+    playerId: string;
+    achievementId: string;
+    unlockedAt: Timestamp;
+}
+
+interface NewsItem {
+    id: string;
+    text: string;
+    createdAt: Timestamp;
+}
+
+// --- Configuration des Hauts Faits ---
+const achievementsList: Achievement[] = [
+    {
+        id: 'veteran',
+        name: 'Le Vétéran',
+        description: 'Participer à 10 parties (toutes saisons confondues).',
+        emoji: '🎖️',
+        type: 'permanent',
+        newsPhrase: (playerName) => `🎖️ ${playerName} est devenu un Vétéran des tables de poker en participant à 10 parties !`
+    },
+    {
+        id: 'conqueror',
+        name: 'Le Conquérant',
+        description: 'Être le joueur avec le plus de victoires (1ère place) durant la saison en cours.',
+        emoji: '�',
+        type: 'saisonnier',
+        newsPhrase: (playerName) => `👑 ${playerName} s'empare du titre de Conquérant de la saison avec le plus de victoires !`
+    },
+    {
+        id: 'red_lantern',
+        name: 'La Lanterne Rouge',
+        description: 'Être le joueur avec le plus de dernières places durant la saison en cours.',
+        emoji: '😥',
+        type: 'saisonnier',
+        newsPhrase: (playerName) => `😥 ${playerName} est la nouvelle Lanterne Rouge de la saison...`
+    }
+];
+
 
 // --- Configuration Firebase ---
+// FIX: Restoring hardcoded Firebase config as requested by the user.
 const firebaseConfig = {
   apiKey: "AIzaSyCEUi2n6f44JwoC64hZ0OqdWfsw-_C-qkU",
   authDomain: "poker-score-8eef5.firebaseapp.com",
@@ -70,11 +126,12 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "1.10.0"; 
+const APP_VERSION = "2.3.0"; // Version bump
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
 const db: Firestore = getFirestore(app);
+setLogLevel('debug');
 
 const appId = 'default-poker-app'; 
 
@@ -92,7 +149,6 @@ const formatDate = (timestamp: Timestamp | undefined, format: 'long' | 'short' =
 
 
 // --- Composants UI ---
-
 const ConfirmationModal: FC<{ show: boolean; onClose: () => void; onConfirm: () => void; title: string; children: React.ReactNode; confirmText?: string; confirmColor?: "red" | "blue" }> = ({ show, onClose, onConfirm, title, children, confirmText = "Confirmer", confirmColor = "red" }) => {
     if (!show) return null;
     const colorClasses = { red: "bg-red-600 hover:bg-red-500", blue: "bg-blue-600 hover:bg-blue-500" };
@@ -116,9 +172,9 @@ const AlertNotification: FC<{ message: string; show: boolean; type?: 'info' | 'e
     return <div className={`fixed top-5 right-5 md:top-20 md:right-5 font-semibold py-3 px-5 rounded-lg shadow-lg z-50 animate-pulse ${colors[type]}`}><p>{message}</p></div>;
 };
 
-const PlayerCard: FC<{ player: PlayerWithStats; onRemove: (player: PlayerWithStats) => void; onEdit: (player: PlayerWithStats) => void; isAdmin: boolean }> = ({ player, onRemove, onEdit, isAdmin }) => (
+const PlayerCard: FC<{ player: PlayerWithStats; onRemove: (player: PlayerWithStats) => void; onEdit: (player: PlayerWithStats) => void; onViewProfile: (playerId: string) => void; isAdmin: boolean }> = ({ player, onRemove, onEdit, onViewProfile, isAdmin }) => (
     <div className="bg-gray-800 p-3 sm:p-4 rounded-lg flex items-center justify-between shadow-lg hover:bg-gray-700 transition-all duration-200">
-        <div className="flex items-center space-x-3 sm:space-x-4">
+        <div onClick={() => onViewProfile(player.id)} className="flex items-center space-x-3 sm:space-x-4 cursor-pointer flex-grow">
             <img src={player.imageUrl || `https://placehold.co/60x60/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-indigo-500 object-cover" onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => { e.currentTarget.onerror = null; e.currentTarget.src = `https://placehold.co/60x60/1f2937/ffffff?text=${player.name.charAt(0)}` }}/>
             <div>
                 <p className="text-md sm:text-lg font-semibold text-white">{player.name}</p>
@@ -137,7 +193,7 @@ const PlayerCard: FC<{ player: PlayerWithStats; onRemove: (player: PlayerWithSta
     </div>
 );
 
-const LeaderboardItem: FC<{ player: PlayerWithStats, rank: number }> = ({ player, rank }) => {
+const LeaderboardItem: FC<{ player: PlayerWithStats; rank: number; onViewProfile: (playerId: string) => void; }> = ({ player, rank, onViewProfile }) => {
     const RankDisplay = () => {
         switch (rank) {
             case 1: return <Trophy className="text-yellow-400" size={24} />;
@@ -147,7 +203,7 @@ const LeaderboardItem: FC<{ player: PlayerWithStats, rank: number }> = ({ player
         }
     };
     return (
-        <div className="bg-gray-800 p-3 sm:p-4 rounded-lg flex items-center justify-between shadow-md">
+        <div onClick={() => onViewProfile(player.id)} className="bg-gray-800 p-3 sm:p-4 rounded-lg flex items-center justify-between shadow-md cursor-pointer hover:bg-gray-700 transition-colors">
             <div className="flex items-center space-x-3 sm:space-x-4">
                  <div className="w-8 flex justify-center items-center"><RankDisplay /></div>
                 <img src={player.imageUrl || `https://placehold.co/50x50/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full border-2 border-indigo-500 object-cover"/>
@@ -247,9 +303,131 @@ const SeasonInfoModal: FC<{ show: boolean; onClose: () => void; season: Season |
     )
 }
 
+const AdminLoginModal: FC<{ show: boolean; onClose: () => void; onLogin: (password: string) => void }> = ({ show, onClose, onLogin }) => {
+    const [password, setPassword] = useState('');
+    if (!show) return null;
+    const handleLogin = () => { onLogin(password); setPassword(''); }
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
+            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm border border-gray-700">
+                <h3 className="text-xl font-bold text-white mb-4">Accès Administrateur</h3>
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleLogin()} placeholder="Mot de passe" className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600 mb-4"/>
+                <div className="flex justify-end gap-4">
+                     <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Fermer</button>
+                     <button onClick={handleLogin} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-md">Connexion</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const EditGameModal: FC<{ show: boolean; game: Game | null; players: Player[]; onClose: () => void; onUpdate: (gameToUpdate: Game, newPlayers: GamePlayer[]) => Promise<void>; showAlert: (message: string, type?: 'info' | 'error' | 'success') => void; }> = ({ show, game, players, onClose, onUpdate, showAlert }) => {
+    const [chipCounts, setChipCounts] = useState<{ [key: string]: string }>({});
+    const [eliminationOrder, setEliminationOrder] = useState<string[]>([]);
+    
+    const gameParticipants = useMemo(() => {
+        if (!game) return [];
+        return players.filter(p => game.players.some(gp => gp.playerId === p.id));
+    }, [game, players]);
+
+    useEffect(() => {
+        if (game) {
+            const initialChips = game.players.reduce((acc, p) => ({ ...acc, [p.playerId]: p.chipCount > 0 ? String(p.chipCount) : '' }), {});
+            const initialElimination = game.players.filter(p => p.chipCount === 0).sort((a, b) => b.rank - a.rank).map(p => p.playerId);
+            setChipCounts(initialChips);
+            setEliminationOrder(initialElimination);
+        }
+    }, [game]);
+
+    if (!show || !game) return null;
+
+    const handleEliminatePlayer = (playerId: string) => {
+        if (!eliminationOrder.includes(playerId)) {
+            setEliminationOrder(prev => [...prev, playerId]);
+        }
+    };
+    
+    const handleChipCountChange = (playerId: string, value: string) => {
+        setChipCounts(prev => ({...prev, [playerId]: value}));
+        if(value && parseInt(value, 10) >= 0) {
+            setEliminationOrder(prev => prev.filter(id => id !== playerId));
+        }
+    }
+    
+    const resetEliminations = () => {
+        setEliminationOrder([]);
+        setChipCounts({});
+    };
+
+    const handleSaveChanges = async () => {
+        const totalPlayers = gameParticipants.length;
+        
+        const eliminatedPlayers = eliminationOrder.map((playerId, index) => {
+            const player = gameParticipants.find(p => p.id === playerId);
+            return {
+                playerId, name: player?.name || 'Inconnu', chipCount: 0,
+                rank: totalPlayers - index, score: (totalPlayers - (totalPlayers - index)) * 10
+            };
+        });
+
+        const survivors = gameParticipants
+            .filter(p => !eliminationOrder.includes(p.id))
+            .map(p => ({ playerId: p.id, name: p.name, chipCount: parseInt(chipCounts[p.id] || "0", 10) }))
+            .sort((a, b) => b.chipCount - a.chipCount);
+        
+        const survivorRankings = survivors.map((survivor, index) => ({ ...survivor, rank: index + 1, score: (totalPlayers - (index + 1)) * 10 }));
+        
+        const allRankedPlayers = [...survivorRankings, ...eliminatedPlayers].sort((a,b) => a.rank - b.rank);
+        
+        if(allRankedPlayers.length !== totalPlayers){
+            // FIX: Replaced alert with the notification system
+            showAlert("Erreur dans le classement, veuillez vérifier les données.", "error");
+            return;
+        }
+
+        await onUpdate(game, allRankedPlayers);
+        onClose();
+    };
+
+    return (
+         <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
+            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-gray-700">
+                <h3 className="text-xl font-bold text-white mb-4">Modifier la partie du {formatDate(game.date)}</h3>
+                <div className="space-y-4 my-6 max-h-[60vh] overflow-y-auto pr-2">
+                     {gameParticipants.map(player => {
+                        const isEliminated = eliminationOrder.includes(player.id);
+                        const eliminationRank = isEliminated ? gameParticipants.length - eliminationOrder.indexOf(player.id) : null;
+                        return (
+                            <div key={player.id} className="flex items-center gap-4 p-2 rounded-lg bg-gray-700">
+                                <img src={player.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full object-cover"/>
+                                <label className="flex-1 text-white font-medium">{player.name}</label>
+                                {isEliminated ? (
+                                    <span className="text-red-400 font-bold">Sorti en {eliminationRank}ème position</span>
+                                ) : (
+                                    <>
+                                        <input type="number" value={chipCounts[player.id] || ''} onChange={e => handleChipCountChange(player.id, e.target.value)} placeholder="Jetons" className="bg-gray-600 text-white p-2 w-28 rounded-md border border-gray-500"/>
+                                        <button onClick={() => handleEliminatePlayer(player.id)} disabled={!!chipCounts[player.id]} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2 disabled:bg-gray-500 disabled:cursor-not-allowed"><LogOut size={16}/>Éliminer</button>
+                                    </>
+                                )}
+                            </div>
+                        )
+                     })}
+                </div>
+                 <div className="flex justify-between items-center pt-4 border-t border-gray-700">
+                    <button onClick={resetEliminations} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2"><RefreshCw size={16}/>Réinitialiser</button>
+                    <div>
+                         <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md mr-2">Annuler</button>
+                         <button onClick={handleSaveChanges} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">Enregistrer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    ); 
+}
+
 // --- Composants de Page ---
 
-const PlayerManagement: FC<{ players: PlayerWithStats[]; isAdmin: boolean }> = ({ players, isAdmin }) => {
+const PlayerManagement: FC<{ players: PlayerWithStats[]; isAdmin: boolean; onViewProfile: (playerId: string) => void; }> = ({ players, isAdmin, onViewProfile }) => {
     const [newName, setNewName] = useState('');
     const [imageUrl, setImageUrl] = useState('');
     const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -300,13 +478,13 @@ const PlayerManagement: FC<{ players: PlayerWithStats[]; isAdmin: boolean }> = (
                 </div>
             )}
             <div className="space-y-4">
-                {players.map(player => <PlayerCard key={player.id} player={player} onRemove={handleRemoveClick} onEdit={handleEditClick} isAdmin={isAdmin} />)}
+                {players.map(player => <PlayerCard key={player.id} player={player} onRemove={handleRemoveClick} onEdit={handleEditClick} isAdmin={isAdmin} onViewProfile={onViewProfile} />)}
             </div>
         </div>
     );
 }
 
-const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) => Promise<void>; activeSeason: Season | null }> = ({ players, onGameEnd, activeSeason }) => {
+const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[], participants: Player[]) => Promise<void>; activeSeason: Season | null; showAlert: (message: string, type?: 'info' | 'error' | 'success') => void; }> = ({ players, onGameEnd, activeSeason, showAlert }) => {
     const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
     const [chipCounts, setChipCounts] = useState<{ [key: string]: string }>({});
     const [eliminationOrder, setEliminationOrder] = useState<string[]>([]);
@@ -367,11 +545,12 @@ const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) 
         const allRankedPlayers = [...survivorRankings, ...eliminatedPlayers].sort((a,b) => a.rank - b.rank);
         
         if(allRankedPlayers.length !== totalPlayers){
-            alert("Erreur dans le classement, veuillez vérifier les données.");
+            // FIX: Replaced alert with the notification system
+            showAlert("Erreur dans le classement, veuillez vérifier les données.", "error");
             return;
         }
 
-        await onGameEnd(allRankedPlayers);
+        await onGameEnd(allRankedPlayers, gameParticipants);
     };
     
     if (!activeSeason) {
@@ -424,14 +603,14 @@ const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) 
     );
 }
 
-const Leaderboard: FC<{ players: PlayerWithStats[]}> = ({ players }) => {
+const Leaderboard: FC<{ players: PlayerWithStats[]; onViewProfile: (playerId: string) => void; }> = ({ players, onViewProfile }) => {
      const sortedPlayers = [...players].sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
     return (
         <div className="space-y-4">
             <div className="bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col sm:flex-row items-center justify-between text-yellow-400 gap-2">
                 <div className="flex items-center"><Trophy size={24} className="mr-3" /><h2 className="text-xl sm:text-2xl font-bold">Classement de la Saison</h2></div>
             </div>
-            {sortedPlayers.map((player, index) => <LeaderboardItem key={player.id} player={player} rank={index + 1} />)}
+            {sortedPlayers.map((player, index) => <LeaderboardItem key={player.id} player={player} rank={index + 1} onViewProfile={onViewProfile} />)}
         </div>
     );
 }
@@ -446,135 +625,17 @@ const GameHistory: FC<{ games: Game[]; players: Player[]; onEditGame: (game: Gam
     )
 }
 
-const EditGameModal: FC<{ show: boolean; game: Game | null; players: Player[]; onClose: () => void; onUpdate: (gameToUpdate: Game, newPlayers: GamePlayer[]) => Promise<void> }> = ({ show, game, players, onClose, onUpdate }) => {
-    const [chipCounts, setChipCounts] = useState<{ [key: string]: string }>({});
-    const [eliminationOrder, setEliminationOrder] = useState<string[]>([]);
-    
-    const gameParticipants = useMemo(() => {
-        if (!game) return [];
-        return players.filter(p => game.players.some(gp => gp.playerId === p.id));
-    }, [game, players]);
-
-    useEffect(() => {
-        if (game) {
-            const initialChips = game.players.reduce((acc, p) => ({ ...acc, [p.playerId]: p.chipCount > 0 ? String(p.chipCount) : '' }), {});
-            const initialElimination = game.players.filter(p => p.chipCount === 0).sort((a, b) => b.rank - a.rank).map(p => p.playerId);
-            setChipCounts(initialChips);
-            setEliminationOrder(initialElimination);
-        }
-    }, [game]);
-
-    if (!show || !game) return null;
-
-    const handleEliminatePlayer = (playerId: string) => {
-        if (!eliminationOrder.includes(playerId)) {
-            setEliminationOrder(prev => [...prev, playerId]);
-        }
-    };
-    
-    const handleChipCountChange = (playerId: string, value: string) => {
-        setChipCounts(prev => ({...prev, [playerId]: value}));
-        if(value && parseInt(value, 10) >= 0) {
-            setEliminationOrder(prev => prev.filter(id => id !== playerId));
-        }
-    }
-    
-    const resetEliminations = () => {
-        setEliminationOrder([]);
-        setChipCounts({});
-    };
-
-    const handleSaveChanges = async () => {
-        const totalPlayers = gameParticipants.length;
-        
-        const eliminatedPlayers = eliminationOrder.map((playerId, index) => {
-            const player = gameParticipants.find(p => p.id === playerId);
-            return {
-                playerId, name: player?.name || 'Inconnu', chipCount: 0,
-                rank: totalPlayers - index, score: (totalPlayers - (totalPlayers - index)) * 10
-            };
-        });
-
-        const survivors = gameParticipants
-            .filter(p => !eliminationOrder.includes(p.id))
-            .map(p => ({ playerId: p.id, name: p.name, chipCount: parseInt(chipCounts[p.id] || "0", 10) }))
-            .sort((a, b) => b.chipCount - a.chipCount);
-        
-        const survivorRankings = survivors.map((survivor, index) => ({ ...survivor, rank: index + 1, score: (totalPlayers - (index + 1)) * 10 }));
-        
-        const allRankedPlayers = [...survivorRankings, ...eliminatedPlayers].sort((a,b) => a.rank - b.rank);
-        
-        if(allRankedPlayers.length !== totalPlayers){
-            alert("Erreur dans le classement, veuillez vérifier les données.");
-            return;
-        }
-
-        await onUpdate(game, allRankedPlayers);
-        onClose();
-    };
-
-    return (
-         <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
-            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-gray-700">
-                <h3 className="text-xl font-bold text-white mb-4">Modifier la partie du {formatDate(game.date)}</h3>
-                <div className="space-y-4 my-6">
-                     {gameParticipants.map(player => {
-                        const isEliminated = eliminationOrder.includes(player.id);
-                        const eliminationRank = isEliminated ? gameParticipants.length - eliminationOrder.indexOf(player.id) : null;
-                        return (
-                            <div key={player.id} className="flex items-center gap-4 p-2 rounded-lg bg-gray-700">
-                                <img src={player.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full object-cover"/>
-                                <label className="flex-1 text-white font-medium">{player.name}</label>
-                                {isEliminated ? (
-                                    <span className="text-red-400 font-bold">Sorti en {eliminationRank}ème position</span>
-                                ) : (
-                                    <>
-                                        <input type="number" value={chipCounts[player.id] || ''} onChange={e => handleChipCountChange(player.id, e.target.value)} placeholder="Jetons" className="bg-gray-600 text-white p-2 w-28 rounded-md border border-gray-500"/>
-                                        <button onClick={() => handleEliminatePlayer(player.id)} disabled={!!chipCounts[player.id]} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2 disabled:bg-gray-500 disabled:cursor-not-allowed"><LogOut size={16}/>Éliminer</button>
-                                    </>
-                                )}
-                            </div>
-                        )
-                     })}
-                </div>
-                 <div className="flex justify-between items-center pt-4">
-                    <button onClick={resetEliminations} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2"><RefreshCw size={16}/>Réinitialiser</button>
-                    <div>
-                         <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md mr-2">Annuler</button>
-                         <button onClick={handleSaveChanges} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">Enregistrer</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    ); 
-}
-
-const AdminLoginModal: FC<{ show: boolean; onClose: () => void; onLogin: (password: string) => void }> = ({ show, onClose, onLogin }) => {
-    const [password, setPassword] = useState('');
-    if (!show) return null;
-    const handleLogin = () => { onLogin(password); setPassword(''); }
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
-            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm border border-gray-700">
-                <h3 className="text-xl font-bold text-white mb-4">Accès Administrateur</h3>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleLogin()} placeholder="Mot de passe" className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600 mb-4"/>
-                <div className="flex justify-end gap-4">
-                     <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Fermer</button>
-                     <button onClick={handleLogin} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-md">Connexion</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const SeasonManagement: FC<{ seasons: Season[]; playersWithStats: PlayerWithStats[], onActivateSeason: (seasonToActivate: Season, currentLeaderboard: PlayerWithStats[]) => Promise<void>, onEditSeason: (season: Season) => void }> = ({ seasons, playersWithStats, onActivateSeason, onEditSeason }) => {
+const SeasonManagement: FC<{ seasons: Season[]; playersWithStats: PlayerWithStats[], onActivateSeason: (seasonToActivate: Season, currentLeaderboard: PlayerWithStats[]) => Promise<void>, onEditSeason: (season: Season) => void; showAlert: (message: string, type?: 'info' | 'error' | 'success') => void; onGeneralReset: () => void; }> = ({ seasons, playersWithStats, onActivateSeason, onEditSeason, showAlert, onGeneralReset }) => {
     const [name, setName] = useState('');
     const [imageUrl, setImageUrl] = useState('');
     const [endDate, setEndDate] = useState('');
     const [prize, setPrize] = useState('');
 
     const handleCreateSeason = async () => {
-        if (!name.trim() || !endDate) { alert("Le nom et la date de fin sont obligatoires."); return; }
+        if (!name.trim() || !endDate) { 
+            showAlert("Le nom et la date de fin sont obligatoires.", "error"); 
+            return; 
+        }
         const seasonsCollectionRef = collection(db, `artifacts/${appId}/public/data/seasons`);
         await addDoc(seasonsCollectionRef, { name, imageUrl, endDate: Timestamp.fromDate(new Date(endDate)), prize, isActive: seasons.length === 0, isClosed: false, });
         setName(''); setImageUrl(''); setEndDate(''); setPrize('');
@@ -612,6 +673,15 @@ const SeasonManagement: FC<{ seasons: Season[]; playersWithStats: PlayerWithStat
                        </div>
                     </div>
                 ))}
+            </div>
+
+            <div className="bg-red-900/50 border-2 border-red-500 p-4 sm:p-6 rounded-lg shadow-lg mt-12">
+                <h2 className="text-xl sm:text-2xl font-bold text-red-300 mb-4 flex items-center"><AlertTriangle className="mr-3" />Zone de Danger</h2>
+                <p className="text-red-300 mb-4">L'action ci-dessous est irréversible et entraînera une perte complète de toutes les données de jeu.</p>
+                <button onClick={onGeneralReset} className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-md flex items-center justify-center transition-colors w-full sm:w-auto">
+                    <Trash2 size={20} className="mr-2"/>
+                    Réinitialisation Générale (RAZ)
+                </button>
             </div>
         </div>
     );
@@ -703,14 +773,134 @@ const PastSeasons: FC<{seasons: Season[], isAdmin: boolean, onDeleteSeason: (sea
     )
 }
 
+const PlayerProfile: FC<{ player: Player, allGames: Game[], playerAchievements: PlayerAchievement[] }> = ({ player, allGames, playerAchievements }) => {
+    const globalStats = useMemo(() => {
+        const totalGamesPlayed = allGames.filter(g => g.players.some(p => p.playerId === player.id)).length;
+        const totalWins = allGames.filter(g => g.players.some(p => p.playerId === player.id && p.rank === 1)).length;
+        
+        let totalRanks = 0;
+        let lastPlaceCount = 0;
+        allGames.forEach(g => {
+            const playerInGame = g.players.find(p => p.playerId === player.id);
+            if(playerInGame) {
+                totalRanks += playerInGame.rank;
+                if(playerInGame.rank === g.players.length) {
+                    lastPlaceCount++;
+                }
+            }
+        });
+
+        const averageRank = totalGamesPlayed > 0 ? (totalRanks / totalGamesPlayed).toFixed(2) : 'N/A';
+        
+        return { totalGamesPlayed, totalWins, averageRank, lastPlaceCount };
+    }, [player, allGames]);
+
+    const unlockedAchievements = useMemo(() => {
+        return achievementsList.filter(ach => playerAchievements.some(pa => pa.playerId === player.id && pa.achievementId === ach.id));
+    }, [player, playerAchievements]);
+
+    return (
+        <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+            <div className="flex flex-col sm:flex-row items-center gap-6">
+                <img src={player.imageUrl || `https://placehold.co/150x150/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-36 h-36 rounded-full border-4 border-indigo-500 object-cover"/>
+                <div className="text-center sm:text-left">
+                    <h2 className="text-3xl font-bold text-white">{player.name}</h2>
+                </div>
+            </div>
+
+            <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div className="bg-gray-700 p-4 rounded-lg">
+                    <p className="text-2xl font-bold text-indigo-400">{globalStats.totalGamesPlayed}</p>
+                    <p className="text-sm text-gray-400">Parties Jouées</p>
+                </div>
+                 <div className="bg-gray-700 p-4 rounded-lg">
+                    <p className="text-2xl font-bold text-indigo-400">{globalStats.totalWins}</p>
+                    <p className="text-sm text-gray-400">Victoires</p>
+                </div>
+                 <div className="bg-gray-700 p-4 rounded-lg">
+                    <p className="text-2xl font-bold text-indigo-400">{globalStats.averageRank}</p>
+                    <p className="text-sm text-gray-400">Classement Moyen</p>
+                </div>
+                 <div className="bg-gray-700 p-4 rounded-lg">
+                    <p className="text-2xl font-bold text-indigo-400">{globalStats.lastPlaceCount}</p>
+                    <p className="text-sm text-gray-400">Dernières Places</p>
+                </div>
+            </div>
+
+            <div className="mt-8">
+                <h3 className="text-xl font-bold text-white mb-4">Hauts Faits Débloqués</h3>
+                {unlockedAchievements.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {unlockedAchievements.map(ach => (
+                            <div key={ach.id} className="bg-gray-700 p-4 rounded-lg flex items-center gap-4">
+                                <span className="text-4xl">{ach.emoji}</span>
+                                <div>
+                                    <p className="font-bold text-white">{ach.name}</p>
+                                    <p className="text-sm text-gray-400">{ach.description}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-gray-400">Aucun haut fait débloqué pour le moment.</p>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// FIX: This component was missing, causing a crash when viewing the "news" tab.
+const NewsFeed: FC<{ news: NewsItem[] }> = ({ news }) => {
+    return (
+        <div className="space-y-4">
+            <div className="bg-gray-800 p-4 rounded-lg shadow-lg flex items-center text-indigo-400">
+                <Newspaper size={24} className="mr-3" />
+                <h2 className="text-xl sm:text-2xl font-bold">Fil d'actualités</h2>
+            </div>
+            {news.length > 0 ? (
+                news.map(item => (
+                    <div key={item.id} className="bg-gray-800 p-4 rounded-lg shadow-md">
+                        <p className="text-white">{item.text}</p>
+                        <p className="text-xs text-gray-500 mt-2 text-right">{formatDate(item.createdAt)}</p>
+                    </div>
+                ))
+            ) : (
+                <p className="text-gray-400 text-center py-8">Aucune actualité pour le moment.</p>
+            )}
+        </div>
+    );
+}
+
+const AchievementsList: FC = () => {
+    return (
+        <div className="space-y-4">
+            <div className="bg-gray-800 p-4 rounded-lg shadow-lg flex items-center text-indigo-400">
+                <Medal size={24} className="mr-3" />
+                <h2 className="text-xl sm:text-2xl font-bold">Liste des Hauts Faits</h2>
+            </div>
+            {achievementsList.map(ach => (
+                <div key={ach.id} className="bg-gray-800 p-4 rounded-lg flex items-start gap-4">
+                    <span className="text-5xl mt-1">{ach.emoji}</span>
+                    <div>
+                        <p className="font-bold text-white text-lg">{ach.name} ({ach.type})</p>
+                        <p className="text-sm text-gray-400">{ach.description}</p>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
 
 // --- Composant Principal App ---
-
 export default function App() {
-    const [view, setView] = useState('home');
+    const [view, setView] = useState('news');
     const [players, setPlayers] = useState<Player[]>([]);
     const [games, setGames] = useState<Game[]>([]);
     const [seasons, setSeasons] = useState<Season[]>([]);
+    const [newsFeed, setNewsFeed] = useState<NewsItem[]>([]);
+    const [playerAchievements, setPlayerAchievements] = useState<PlayerAchievement[]>([]);
+    const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+    
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [loading, setLoading] = useState(true);
     const [editingGame, setEditingGame] = useState<Game | null>(null);
@@ -719,28 +909,52 @@ export default function App() {
     const [showAdminLogin, setShowAdminLogin] = useState(false);
     const [showSeasonInfo, setShowSeasonInfo] = useState(false);
     const [seasonToDelete, setSeasonToDelete] = useState<Season | null>(null);
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [alert, setAlert] = useState({ show: false, message: '', type: 'info' as 'info' | 'error' | 'success' });
 
     useEffect(() => { if (alert.show) { const timer = setTimeout(() => setAlert({ show: false, message: '', type: 'info' }), 3000); return () => clearTimeout(timer); } }, [alert]);
     const showAlert = (message: string, type: 'info' | 'error' | 'success' = 'info') => setAlert({ show: true, message, type });
 
+    // FIX: Restoring original authentication flow.
     useEffect(() => {
-        const unsubscribeAuth = onAuthStateChanged(auth, async (user) => { if (!user) { try { await signInAnonymously(auth); } catch (error) { console.error("Anonymous auth error:", error); } } setIsAuthReady(true); });
+        const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                try {
+                    await signInAnonymously(auth);
+                } catch (error) {
+                    console.error("Anonymous auth error:", error);
+                    showAlert("Erreur d'authentification", "error");
+                }
+            }
+            setIsAuthReady(true);
+        });
         return () => unsubscribeAuth();
     }, []);
     
     useEffect(() => {
         if (!isAuthReady) return;
         setLoading(true);
-        const playersQuery = query(collection(db, `artifacts/${appId}/public/data/players`));
-        const gamesQuery = query(collection(db, `artifacts/${appId}/public/data/games`));
-        const seasonsQuery = query(collection(db, `artifacts/${appId}/public/data/seasons`));
+
+        // IMPROVEMENT: Centralized path definitions
+        const playersPath = `artifacts/${appId}/public/data/players`;
+        const gamesPath = `artifacts/${appId}/public/data/games`;
+        const seasonsPath = `artifacts/${appId}/public/data/seasons`;
+        const newsPath = `artifacts/${appId}/public/data/news_feed`;
+        const achievementsPath = `artifacts/${appId}/public/data/player_achievements`;
+
+        const playersQuery = query(collection(db, playersPath));
+        const gamesQuery = query(collection(db, gamesPath));
+        const seasonsQuery = query(collection(db, seasonsPath));
+        const newsQuery = query(collection(db, newsPath), orderBy('createdAt', 'desc'), limit(20));
+        const playerAchievementsQuery = query(collection(db, achievementsPath));
         
-        const unsubPlayers = onSnapshot(playersQuery, (snap) => { setPlayers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player))); setLoading(false); }, (err) => { console.error("Player read error: ", err); setLoading(false); });
-        const unsubGames = onSnapshot(gamesQuery, (snap) => { setGames(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Game))); }, (err) => console.error("Games read error: ", err));
-        const unsubSeasons = onSnapshot(seasonsQuery, (snap) => { setSeasons(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Season))); }, (err) => console.error("Seasons read error: ", err));
+        const unsubPlayers = onSnapshot(playersQuery, (snap) => { setPlayers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player))); setLoading(false); }, (err) => { console.error("Player read error: ", err); setLoading(false); showAlert("Erreur de lecture (joueurs)", "error"); });
+        const unsubGames = onSnapshot(gamesQuery, (snap) => { setGames(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Game))); }, (err) => { console.error("Games read error: ", err); showAlert("Erreur de lecture (parties)", "error");});
+        const unsubSeasons = onSnapshot(seasonsQuery, (snap) => { setSeasons(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Season))); }, (err) => { console.error("Seasons read error: ", err); showAlert("Erreur de lecture (saisons)", "error");});
+        const unsubNews = onSnapshot(newsQuery, (snap) => { setNewsFeed(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as NewsItem))); }, (err) => { console.error("News read error: ", err); showAlert("Erreur de lecture (actus)", "error");});
+        const unsubPlayerAchievements = onSnapshot(playerAchievementsQuery, (snap) => { setPlayerAchievements(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as PlayerAchievement))); }, (err) => { console.error("Player Achievements read error: ", err); showAlert("Erreur de lecture (hauts faits)", "error");});
         
-        return () => { unsubPlayers(); unsubGames(); unsubSeasons(); };
+        return () => { unsubPlayers(); unsubGames(); unsubSeasons(); unsubNews(); unsubPlayerAchievements(); };
     }, [isAuthReady]);
 
     const activeSeason = useMemo(() => seasons.find(s => s.isActive) || null, [seasons]);
@@ -756,10 +970,8 @@ export default function App() {
         gamesOfActiveSeason.forEach(game => {
             if (!game.players) return;
             const winner = game.players.find(p => p.rank === 1);
-            if(winner) {
-                 if (stats[winner.playerId]) {
-                    stats[winner.playerId].wins = (stats[winner.playerId].wins || 0) + 1;
-                }
+            if(winner && stats[winner.playerId]) {
+                stats[winner.playerId].wins = (stats[winner.playerId].wins || 0) + 1;
             }
             game.players.forEach(p => {
                 if (stats[p.playerId]) {
@@ -767,8 +979,13 @@ export default function App() {
                 }
             });
         });
-        return players.map(player => ({...player, ...stats[player.id]})).sort((a,b) => b.totalScore - a.totalScore);
+        return players.map(player => ({...player, ...stats[player.id]})).sort((a,b) => (b.totalScore || 0) - (a.totalScore || 0));
     }, [players, gamesOfActiveSeason]);
+
+    const selectedPlayer = useMemo(() => {
+        if (!selectedPlayerId) return null;
+        return players.find(p => p.id === selectedPlayerId) || null;
+    }, [selectedPlayerId, players]);
 
     const handleAdminLogin = (password: string) => {
         if (password === ADMIN_PASSWORD) { setIsAdmin(true); setShowAdminLogin(false); showAlert("Mode administrateur activé", "success"); } 
@@ -776,11 +993,42 @@ export default function App() {
     };
     const handleAdminLogout = () => { setIsAdmin(false); showAlert("Mode administrateur désactivé"); };
     
-    const handleGameEnd = async (scoredPlayers: GamePlayer[]) => {
+    // IMPROVEMENT: Passing allGames avoids a costly re-fetch inside the function.
+    const checkAchievements = async (newGame: Game, participants: Player[], allGames: Game[]) => {
+        const batch = writeBatch(db);
+        const newsCollection = collection(db, `artifacts/${appId}/public/data/news_feed`);
+        const playerAchievementsCollection = collection(db, `artifacts/${appId}/public/data/player_achievements`);
+
+        // Add the just-played game to the list for accurate counting
+        const currentGames = [...allGames, newGame];
+
+        // --- Veteran Achievement Check ---
+        const veteranAchievement = achievementsList.find(a => a.id === 'veteran')!;
+        for(const player of participants) {
+            const hasVeteran = playerAchievements.some(pa => pa.playerId === player.id && pa.achievementId === 'veteran');
+            if(!hasVeteran) {
+                const totalGamesPlayed = currentGames.filter(g => g.players.some(p => p.playerId === player.id)).length;
+                if(totalGamesPlayed >= 10) {
+                    const newAchievementRef = doc(playerAchievementsCollection);
+                    batch.set(newAchievementRef, { playerId: player.id, achievementId: 'veteran', unlockedAt: Timestamp.now() });
+                    const newNewsRef = doc(newsCollection);
+                    batch.set(newNewsRef, { text: veteranAchievement.newsPhrase(player.name), createdAt: Timestamp.now() });
+                }
+            }
+        }
+        
+        // TODO: Implement seasonal achievement checks (Conqueror, Red Lantern) here.
+        // This would involve finding the current leader for wins/losses and checking if it has changed.
+
+        await batch.commit();
+    };
+
+    const handleGameEnd = async (scoredPlayers: GamePlayer[], participants: Player[]) => {
         if (!activeSeason) { showAlert("Aucune saison active pour enregistrer la partie.", "error"); return; }
         const batch = writeBatch(db);
         const newGameRef = doc(collection(db, `artifacts/${appId}/public/data/games`));
-        batch.set(newGameRef, { date: new Date(), players: scoredPlayers, seasonId: activeSeason.id });
+        const newGameData = { date: new Date(), players: scoredPlayers, seasonId: activeSeason.id };
+        batch.set(newGameRef, newGameData);
         for (const sp of scoredPlayers) {
             const playerRef = doc(db, `artifacts/${appId}/public/data/players`, sp.playerId);
             const player = players.find(p => p.id === sp.playerId);
@@ -788,7 +1036,10 @@ export default function App() {
         }
         await batch.commit();
         showAlert("La partie a été enregistrée !", "success");
-        setView('home');
+        setView('news');
+
+        // IMPROVEMENT: Pass the full 'games' state to avoid a re-fetch.
+        await checkAchievements({id: newGameRef.id, ...newGameData, date: Timestamp.fromDate(newGameData.date)}, participants, games);
     };
 
     const handleGameUpdate = async (gameToUpdate: Game, newPlayers: GamePlayer[]) => {
@@ -816,12 +1067,14 @@ export default function App() {
 
         await batch.commit();
         showAlert("La partie a été mise à jour avec succès !", "success");
+        setEditingGame(null);
     };
 
     const handleActivateSeason = async (seasonToActivate: Season, currentLeaderboard: PlayerWithStats[]) => {
         const batch = writeBatch(db);
         if(activeSeason) {
-            const finalLeaderboardData = currentLeaderboard.map((p, index) => {
+            const sortedLeaderboard = [...currentLeaderboard].sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
+            const finalLeaderboardData = sortedLeaderboard.map((p, index) => {
                 const {id, name, imageUrl, totalScore, gamesPlayed, wins} = p;
                 return {id, name, imageUrl, totalScore, gamesPlayed, wins, rank: index + 1};
             });
@@ -836,7 +1089,7 @@ export default function App() {
         });
         await batch.commit();
         showAlert(`La saison "${seasonToActivate.name}" est maintenant active !`, "success");
-        setView('home');
+        setView('news');
     }
     
     const handleUpdateSeason = async (seasonId: string, updatedData: { name: string; imageUrl: string; endDate: string; prize: string }) => {
@@ -864,6 +1117,41 @@ export default function App() {
         showAlert("Saison supprimée avec succès.", "success");
     }
 
+    const handleGeneralReset = async () => {
+        setShowResetConfirm(false);
+        showAlert("Réinitialisation en cours...", "info");
+        
+        try {
+            const batch = writeBatch(db);
+
+            // Collections to wipe
+            const collectionsToWipe = ['games', 'seasons', 'news_feed', 'player_achievements'];
+            for (const collectionName of collectionsToWipe) {
+                const collectionRef = collection(db, `artifacts/${appId}/public/data/${collectionName}`);
+                const snapshot = await getDocs(query(collectionRef));
+                snapshot.forEach(doc => batch.delete(doc.ref));
+            }
+            
+            // Reset player scores
+            for (const player of players) {
+                const playerRef = doc(db, `artifacts/${appId}/public/data/players`, player.id);
+                batch.update(playerRef, { totalScore: 0 });
+            }
+
+            await batch.commit();
+            showAlert("Réinitialisation générale terminée avec succès !", "success");
+            setView('news'); // Go back to a safe view
+        } catch (error) {
+            console.error("Error during general reset:", error);
+            showAlert("Une erreur est survenue lors de la réinitialisation.", "error");
+        }
+    }
+
+    const handleViewProfile = (playerId: string) => {
+        setSelectedPlayerId(playerId);
+        setView('player_profile');
+    }
+
     const NavButton: FC<{ targetView: string; icon: React.ElementType; label: string }> = ({ targetView, icon, label }) => {
         const Icon = icon;
         return <button onClick={() => setView(targetView)} className={`flex-1 flex flex-col sm:flex-row items-center justify-center p-3 rounded-md text-sm sm:text-base font-medium transition-colors ${view === targetView ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}><Icon size={20} className="mb-1 sm:mb-0 sm:mr-2" />{label}</button>
@@ -872,13 +1160,16 @@ export default function App() {
     const renderView = () => {
         if (loading || !isAuthReady) return <div className="text-center text-white py-10">Chargement des données...</div>
         switch (view) {
-            case 'home': return <Leaderboard players={playersWithStats} />;
-            case 'players': return <PlayerManagement players={playersWithStats} isAdmin={isAdmin} />;
-            case 'new_game': return <NewGame players={players} onGameEnd={handleGameEnd} activeSeason={activeSeason} />;
+            case 'news': return <NewsFeed news={newsFeed} />;
+            case 'home': return <Leaderboard players={playersWithStats} onViewProfile={handleViewProfile}/>;
+            case 'players': return <PlayerManagement players={playersWithStats} isAdmin={isAdmin} onViewProfile={handleViewProfile}/>;
+            case 'new_game': return <NewGame players={players} onGameEnd={handleGameEnd} activeSeason={activeSeason} showAlert={showAlert}/>;
             case 'history': return <GameHistory games={gamesOfActiveSeason} players={players} onEditGame={(game: Game) => setEditingGame(game)} isAdmin={isAdmin} />;
-            case 'seasons': return <SeasonManagement seasons={seasons} playersWithStats={playersWithStats} onActivateSeason={handleActivateSeason} onEditSeason={setEditingSeason} />;
+            case 'seasons': return <SeasonManagement seasons={seasons} playersWithStats={playersWithStats} onActivateSeason={handleActivateSeason} onEditSeason={setEditingSeason} showAlert={showAlert} onGeneralReset={() => setShowResetConfirm(true)} />;
             case 'past_seasons': return <PastSeasons seasons={seasons} isAdmin={isAdmin} onDeleteSeason={handleDeleteSeason} />;
-            default: return <Leaderboard players={playersWithStats} />;
+            case 'player_profile': return selectedPlayer ? <PlayerProfile player={selectedPlayer} allGames={games} playerAchievements={playerAchievements} /> : <div className="text-center text-red-500">Erreur: Joueur non trouvé</div>;
+            case 'achievements_list': return <AchievementsList />;
+            default: return <NewsFeed news={newsFeed} />;
         }
     };
     
@@ -886,11 +1177,22 @@ export default function App() {
         <div className="bg-gray-900 text-white min-h-screen font-sans">
              <AlertNotification message={alert.message} show={alert.show} type={alert.type} />
              <AdminLoginModal show={showAdminLogin} onClose={() => setShowAdminLogin(false)} onLogin={handleAdminLogin} />
-             <EditGameModal show={!!editingGame} game={editingGame} players={players} onClose={() => setEditingGame(null)} onUpdate={handleGameUpdate} />
+             <EditGameModal show={!!editingGame} game={editingGame} players={players} onClose={() => setEditingGame(null)} onUpdate={handleGameUpdate} showAlert={showAlert} />
              <SeasonInfoModal show={showSeasonInfo} onClose={() => setShowSeasonInfo(false)} season={activeSeason}/>
              <EditSeasonModal show={!!editingSeason} season={editingSeason} onClose={() => setEditingSeason(null)} onUpdate={handleUpdateSeason} />
              <ConfirmationModal show={!!seasonToDelete} onClose={() => setSeasonToDelete(null)} onConfirm={confirmDeleteSeason} title="Supprimer la Saison ?" confirmText="Supprimer" confirmColor="red">
                 <p>Êtes-vous sûr de vouloir supprimer la saison <strong>{seasonToDelete?.name}</strong>? Cette action est irréversible et ne peut pas être annulée.</p>
+            </ConfirmationModal>
+             <ConfirmationModal show={showResetConfirm} onClose={() => setShowResetConfirm(false)} onConfirm={handleGeneralReset} title="Réinitialisation Générale (RAZ)" confirmText="Oui, TOUT supprimer" confirmColor="red">
+                <p className='font-bold text-lg text-red-400'>ATTENTION : ACTION IRRÉVERSIBLE</p>
+                <p>Vous êtes sur le point de supprimer DÉFINITIVEMENT :</p>
+                <ul className="list-disc list-inside my-2 text-red-400">
+                    <li>Toutes les saisons (actives et archivées)</li>
+                    <li>Toutes les parties enregistrées</li>
+                    <li>Tout l'historique des actualités</li>
+                    <li>Tous les hauts faits débloqués</li>
+                </ul>
+                <p>Seule la liste des joueurs sera conservée, mais leurs scores seront remis à zéro. Êtes-vous absolument certain de vouloir continuer ?</p>
             </ConfirmationModal>
 
             <div className="w-full mx-auto p-4 md:p-6 lg:p-8">
@@ -911,12 +1213,18 @@ export default function App() {
                 </header>
 
                 <nav className="flex flex-wrap gap-2 mb-6 sm:mb-8">
+                    <NavButton targetView="news" icon={Newspaper} label="Actualités" />
                     <NavButton targetView="home" icon={Trophy} label="Classement" />
                     <NavButton targetView="players" icon={Users} label="Joueurs" />
                     <NavButton targetView="new_game" icon={Gamepad2} label="Nouvelle Partie" />
                     <NavButton targetView="history" icon={History} label="Historique" />
                     <NavButton targetView="past_seasons" icon={ArchiveRestore} label="Saisons Passées" />
-                    {isAdmin && <NavButton targetView="seasons" icon={LayoutGrid} label="Gérer Saisons" />}
+                    {isAdmin && (
+                        <>
+                            <NavButton targetView="seasons" icon={LayoutGrid} label="Gérer Saisons" />
+                            <NavButton targetView="achievements_list" icon={Medal} label="Hauts Faits" />
+                        </>
+                    )}
                 </nav>
 
                 <main>{renderView()}</main>
