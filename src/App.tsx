@@ -17,7 +17,7 @@ import {
     Timestamp 
 } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
-import { Lock, Unlock, PlusCircle, Trash2, Crown, Users, Trophy, Gamepad2, History, Pencil, ShieldAlert, LayoutGrid, Info, PlayCircle, Archive, ArchiveRestore } from 'lucide-react';
+import { Lock, Unlock, PlusCircle, Trash2, Crown, Users, Trophy, Gamepad2, History, Pencil, ShieldAlert, LayoutGrid, Info, PlayCircle, Archive, ArchiveRestore, RefreshCw, LogOut } from 'lucide-react';
 
 // --- Types TypeScript ---
 interface Player {
@@ -42,7 +42,7 @@ interface GamePlayer {
 }
 
 interface Game {
-    id: string;
+    id:string;
     seasonId: string;
     date: Timestamp;
     players: GamePlayer[];
@@ -70,7 +70,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "1.6.0"; 
+const APP_VERSION = "1.8.0"; 
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -79,17 +79,6 @@ const db: Firestore = getFirestore(app);
 const appId = 'default-poker-app'; 
 
 // --- Fonctions Utilitaires ---
-const calculateScores = (gamePlayersWithChips: { playerId: string; name: string; chipCount: number }[]): GamePlayer[] => {
-    const sortedByChips = [...gamePlayersWithChips].sort((a, b) => b.chipCount - a.chipCount);
-    const playerCount = sortedByChips.length;
-    const BASE_MULTIPLIER = 10;
-    return sortedByChips.map((player, index) => {
-        const rank = index + 1;
-        const score = (playerCount - rank + 1) * BASE_MULTIPLIER;
-        return { ...player, score, rank };
-    });
-};
-
 const formatDate = (timestamp: Timestamp | undefined) => {
     if (!timestamp) return 'Date inconnue';
     return new Date(timestamp.seconds * 1000).toLocaleDateString('fr-FR', {
@@ -173,7 +162,7 @@ const LeaderboardItem: FC<{ player: PlayerWithStats, rank: number }> = ({ player
 
 const GameHistoryCard: FC<{ game: Game; players: Player[]; onEdit: (game: Game) => void; isAdmin: boolean }> = ({ game, players, onEdit, isAdmin }) => {
     const gameDate = formatDate(game.date);
-    const sortedPlayers = [...game.players].sort((a, b) => b.score - a.score);
+    const sortedPlayers = [...game.players].sort((a, b) => a.rank - b.rank);
     const getPlayerImage = (playerId: string) => players.find(p => p.id === playerId)?.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=P`;
     return (
         <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg">
@@ -185,10 +174,10 @@ const GameHistoryCard: FC<{ game: Game; players: Player[]; onEdit: (game: Game) 
                 </div>
             </div>
             <ul className="space-y-3">
-                {sortedPlayers.map((p, index) => (
+                {sortedPlayers.map((p) => (
                     <li key={p.playerId} className="flex items-center justify-between bg-gray-700 p-2 sm:p-3 rounded-md text-sm">
                         <div className="flex items-center">
-                             <span className="font-bold text-md sm:text-lg w-6 text-yellow-400">{index + 1}</span>
+                             <span className="font-bold text-md sm:text-lg w-6 text-yellow-400">{p.rank}</span>
                              <img src={getPlayerImage(p.playerId)} alt={p.name} className="w-8 h-8 rounded-full mx-2 sm:mx-3 object-cover"/>
                             <span className="text-white whitespace-nowrap overflow-hidden text-ellipsis max-w-[100px] sm:max-w-none">{p.name}</span>
                         </div>
@@ -315,68 +304,119 @@ const PlayerManagement: FC<{ players: PlayerWithStats[]; isAdmin: boolean }> = (
 
 const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) => Promise<void>; activeSeason: Season | null }> = ({ players, onGameEnd, activeSeason }) => {
     const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
-    const [chipCounts, setChipCounts] = useState<{[key: string]: string}>({});
+    const [chipCounts, setChipCounts] = useState<{ [key: string]: string }>({});
+    const [eliminationOrder, setEliminationOrder] = useState<string[]>([]);
     const [isGameStarted, setIsGameStarted] = useState(false);
-    const [alert, setAlert] = useState({ show: false, message: '', type: 'info' as 'info' | 'error' | 'success' });
-    useEffect(() => { if (alert.show) { const timer = setTimeout(() => setAlert({ show: false, message: '', type: 'info' }), 3000); return () => clearTimeout(timer); } }, [alert]);
-    const showAlert = (message: string, type: 'info' | 'error' | 'success' = 'info') => setAlert({ show: true, message, type });
-    const togglePlayerSelection = (playerId: string) => setSelectedPlayers(prev => prev.includes(playerId) ? prev.filter(pId => pId !== playerId) : [...prev, playerId]);
-    const handleChipCountChange = (playerId: string, value: string) => setChipCounts(prev => ({ ...prev, [playerId]: value }));
-    const startGame = () => {
-        if (selectedPlayers.length < 2) { showAlert("Veuillez sélectionner au moins 2 joueurs.", "error"); return; }
-        setChipCounts(selectedPlayers.reduce((acc, pId) => ({ ...acc, [pId]: '' }), {}));
-        setIsGameStarted(true);
-    };
-    const finishGame = async () => {
-        let hasError = false;
-        const gamePlayers = selectedPlayers.map(pId => {
-            const player = players.find(p => p.id === pId); if (!player) return null;
-            const chipCount = parseInt(chipCounts[pId], 10);
-            if (isNaN(chipCount) || chipCount < 0) { if (!hasError) showAlert(`Veuillez entrer un nombre de jetons valide pour ${player.name}.`, 'error'); hasError = true; return null; }
-            return { playerId: pId, name: player.name, chipCount };
-        }).filter((p): p is { playerId: string; name: string; chipCount: number } => p !== null);
-        if (hasError || gamePlayers.length !== selectedPlayers.length) return;
-        await onGameEnd(calculateScores(gamePlayers));
-        setSelectedPlayers([]); setChipCounts({}); setIsGameStarted(false);
-    };
 
-    if (!activeSeason) {
-        return <div className="bg-yellow-900 text-yellow-200 p-4 rounded-lg text-center">Aucune saison n'est active. Veuillez en activer une dans la section "Saisons" pour pouvoir lancer une partie.</div>
+    const gameParticipants = useMemo(() => players.filter(p => selectedPlayers.includes(p.id)), [players, selectedPlayers]);
+
+    const handleEliminatePlayer = (playerId: string) => {
+        if (!eliminationOrder.includes(playerId)) {
+            setEliminationOrder(prev => [...prev, playerId]);
+        }
+    };
+    
+    const handleChipCountChange = (playerId: string, value: string) => {
+        setChipCounts(prev => ({...prev, [playerId]: value}));
+        // Si on saisit des jetons, le joueur ne peut plus être éliminé
+        if(value && parseInt(value, 10) > 0) {
+            setEliminationOrder(prev => prev.filter(id => id !== playerId));
+        }
     }
 
+    const resetEliminations = () => setEliminationOrder([]);
+
+    const finishGame = async () => {
+        const totalPlayers = gameParticipants.length;
+        const finalRanking: GamePlayer[] = [];
+
+        // 1. Gérer les joueurs éliminés
+        const eliminatedPlayers = eliminationOrder.map((playerId, index) => {
+            const player = gameParticipants.find(p => p.id === playerId);
+            return {
+                playerId,
+                name: player?.name || 'Inconnu',
+                chipCount: 0,
+                rank: totalPlayers - index,
+                score: (totalPlayers - (totalPlayers - index)) * 10
+            };
+        });
+
+        // 2. Gérer les survivants
+        const survivors = gameParticipants
+            .filter(p => !eliminationOrder.includes(p.id))
+            .map(p => ({
+                playerId: p.id,
+                name: p.name,
+                chipCount: parseInt(chipCounts[p.id] || "0", 10),
+            }))
+            .sort((a, b) => b.chipCount - a.chipCount);
+        
+        const survivorRankings = survivors.map((survivor, index) => {
+            const rank = index + 1;
+            return {
+                ...survivor,
+                rank,
+                score: (totalPlayers - rank) * 10
+            }
+        });
+        
+        // 3. Combiner et valider
+        const allRankedPlayers = [...survivorRankings, ...eliminatedPlayers].sort((a,b) => a.rank - b.rank);
+        
+        if(allRankedPlayers.length !== totalPlayers){
+            // Idéalement, utiliser AlertNotification
+            alert("Erreur dans le classement, veuillez vérifier les données.");
+            return;
+        }
+
+        await onGameEnd(allRankedPlayers);
+    };
+    
+    if (!activeSeason) {
+        return <div className="bg-yellow-900 text-yellow-200 p-4 rounded-lg text-center">Aucune saison n'est active. Veuillez en activer une pour lancer une partie.</div>
+    }
+    
     return (
         <div className="relative">
-            <AlertNotification message={alert.message} show={alert.show} type={alert.type} />
-            {isGameStarted ? (
-                <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg space-y-4">
-                    <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Saisir les scores</h2>
-                    {selectedPlayers.map(pId => {
-                        const player = players.find(p => p.id === pId); if (!player) return null;
-                        return (
-                            <div key={pId} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
-                                <div className="flex items-center gap-3"><img src={player.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full object-cover"/><label className="text-white font-medium sm:w-32">{player.name}</label></div>
-                                <input type="number" min="0" value={chipCounts[pId] || ''} onChange={(e) => handleChipCountChange(pId, e.target.value)} placeholder="Jetons restants" className="w-full sm:flex-grow bg-gray-700 text-white p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+            {!isGameStarted ? (
+                <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg space-y-6">
+                    <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Sélectionner les Joueurs</h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+                        {players.map(player => (
+                            <div key={player.id} onClick={() => setSelectedPlayers(prev => prev.includes(player.id) ? prev.filter(pId => pId !== player.id) : [...prev, player.id])} className={`p-3 rounded-lg cursor-pointer transition-all border-2 ${selectedPlayers.includes(player.id) ? 'bg-indigo-600 border-indigo-400' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}>
+                                <div className="flex flex-col items-center text-center"><img src={player.imageUrl || `https://placehold.co/80x80/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full mb-2 object-cover"/><p className="text-white font-medium text-sm sm:text-base">{player.name}</p></div>
                             </div>
-                        );
-                    })}
-                    <div className="flex justify-end gap-4 pt-4">
-                        <button onClick={() => setIsGameStarted(false)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Retour</button>
-                        <button onClick={finishGame} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">Terminer</button>
+                        ))}
                     </div>
+                    <div className="flex justify-center pt-4"><button onClick={() => setIsGameStarted(true)} disabled={selectedPlayers.length < 2} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 sm:px-8 rounded-md flex items-center justify-center disabled:bg-gray-500 disabled:cursor-not-allowed w-full sm:w-auto"><Gamepad2 size={20} className="mr-2"/>Démarrer la Partie ({selectedPlayers.length})</button></div>
                 </div>
             ) : (
-                <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg space-y-6">
-                    <div>
-                        <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Sélectionner les Joueurs</h2>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
-                            {players.map(player => (
-                                <div key={player.id} onClick={() => togglePlayerSelection(player.id)} className={`p-3 rounded-lg cursor-pointer transition-all border-2 ${selectedPlayers.includes(player.id) ? 'bg-indigo-600 border-indigo-400' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}>
-                                    <div className="flex flex-col items-center text-center"><img src={player.imageUrl || `https://placehold.co/80x80/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full mb-2 object-cover"/><p className="text-white font-medium text-sm sm:text-base">{player.name}</p></div>
-                                </div>
-                            ))}
-                        </div>
+                <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg space-y-4">
+                     <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Résultats de la partie</h2>
+                     {gameParticipants.map(player => {
+                        const isEliminated = eliminationOrder.includes(player.id);
+                        const eliminationRank = isEliminated ? gameParticipants.length - eliminationOrder.indexOf(player.id) : null;
+                        
+                        return (
+                            <div key={player.id} className="flex items-center gap-4 p-2 rounded-lg bg-gray-700">
+                                <img src={player.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full object-cover"/>
+                                <label className="flex-1 text-white font-medium">{player.name}</label>
+                                {isEliminated ? (
+                                    <span className="text-red-400 font-bold">Sorti en {eliminationRank}ème position</span>
+                                ) : (
+                                    <>
+                                        <input type="number" value={chipCounts[player.id] || ''} onChange={e => handleChipCountChange(player.id, e.target.value)} placeholder="Jetons" className="bg-gray-600 text-white p-2 w-28 rounded-md border border-gray-500"/>
+                                        <button onClick={() => handleEliminatePlayer(player.id)} disabled={!!chipCounts[player.id]} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2 disabled:bg-gray-500 disabled:cursor-not-allowed"><LogOut size={16}/>Éliminer</button>
+                                    </>
+                                )}
+                            </div>
+                        )
+                     })}
+                     <div className="flex justify-between items-center pt-4">
+                        <button onClick={resetEliminations} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2"><RefreshCw size={16}/>Réinitialiser</button>
+                        <button onClick={finishGame} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">Terminer la Partie</button>
                     </div>
-                    <div className="flex justify-center pt-4"><button onClick={startGame} disabled={selectedPlayers.length < 2} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 sm:px-8 rounded-md flex items-center justify-center disabled:bg-gray-500 disabled:cursor-not-allowed w-full sm:w-auto"><Gamepad2 size={20} className="mr-2"/>Démarrer ({selectedPlayers.length})</button></div>
                 </div>
             )}
         </div>
@@ -406,42 +446,8 @@ const GameHistory: FC<{ games: Game[]; players: Player[]; onEditGame: (game: Gam
 }
 
 const EditGameModal: FC<{ show: boolean; game: Game | null; players: Player[]; onUpdate: (game: Game, chipCounts: {[key: string]: string}) => void; onClose: () => void }> = ({ show, game, players, onUpdate, onClose }) => {
-    const [chipCounts, setChipCounts] = useState<{[key: string]: string}>({});
-    const [alert, setAlert] = useState({ show: false, message: '', type: 'info' as 'info' | 'error' | 'success'});
-    useEffect(() => { if (game) setChipCounts(game.players.reduce((acc, p) => ({...acc, [p.playerId]: String(p.chipCount)}), {}))}, [game]);
-    useEffect(() => { if (alert.show) { const timer = setTimeout(() => setAlert({ show: false, message: '', type: 'info' }), 3000); return () => clearTimeout(timer); } }, [alert]);
-    if (!show || !game) return null;
-    const showAlert = (message: string, type: 'info' | 'error' | 'success' = 'info') => setAlert({ show: true, message, type });
-    const handleChipCountChange = (playerId: string, value: string) => setChipCounts(prev => ({ ...prev, [playerId]: value }));
-    const getPlayerDetails = (playerId: string) => players.find(p => p.id === playerId);
-    const handleSave = () => {
-        for (const playerId in chipCounts) { if (chipCounts[playerId] === '' || isNaN(parseInt(chipCounts[playerId], 10))) { showAlert("Veuillez remplir tous les scores avec des nombres valides.", "error"); return; } }
-        onUpdate(game, chipCounts);
-    };
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
-            <AlertNotification message={alert.message} show={alert.show} type={alert.type} />
-            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-gray-700">
-                <h3 className="text-xl font-bold text-white mb-4">Éditer la partie du {formatDate(game.date)}</h3>
-                <div className="space-y-4 my-6">
-                    {game.players.map(p => {
-                        const playerDetails = getPlayerDetails(p.playerId); if (!playerDetails) return null;
-                        return (
-                            <div key={p.playerId} className="flex items-center gap-4">
-                               <img src={playerDetails.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${p.name.charAt(0)}`} alt={p.name} className="w-10 h-10 rounded-full object-cover"/>
-                                <label className="text-white font-medium w-32 truncate" title={p.name}>{p.name}</label>
-                                <input type="number" min="0" value={chipCounts[p.playerId] ?? ''} onChange={(e) => handleChipCountChange(p.playerId, e.target.value)} placeholder="Jetons restants" className="flex-grow bg-gray-700 text-white p-3 rounded-md border border-gray-600"/>
-                            </div>
-                        );
-                    })}
-                </div>
-                <div className="flex justify-end gap-4">
-                    <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Annuler</button>
-                    <button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-md">Enregistrer</button>
-                </div>
-            </div>
-        </div>
-    );
+    // TODO: La mise à jour des parties doit être revue pour s'adapter au nouveau système de score.
+    return null; 
 }
 
 const AdminLoginModal: FC<{ show: boolean; onClose: () => void; onLogin: (password: string) => void }> = ({ show, onClose, onLogin }) => {
@@ -511,7 +517,6 @@ const SeasonManagement: FC<{ seasons: Season[]; playersWithStats: PlayerWithStat
     );
 };
 
-// NOUVEAU: Composant pour la page des archives
 const PastSeasons: FC<{seasons: Season[], isAdmin: boolean, onDeleteSeason: (seasonId: string) => void}> = ({ seasons, isAdmin, onDeleteSeason }) => {
     const closedSeasons = useMemo(() => seasons.filter(s => s.isClosed).sort((a, b) => b.endDate.seconds - a.endDate.seconds), [seasons]);
 
@@ -539,7 +544,7 @@ const PastSeasons: FC<{seasons: Season[], isAdmin: boolean, onDeleteSeason: (sea
                             </div>
                         )}
                         <ul className="space-y-2">
-                           {season.finalLeaderboard?.map(player => (
+                           {season.finalLeaderboard?.sort((a,b) => (a.rank || 0) - (b.rank || 0)).map(player => (
                                <li key={player.id} className="flex items-center justify-between bg-gray-700 p-3 rounded-md">
                                    <div className="flex items-center">
                                        <span className="font-bold text-lg w-8">{player.rank}</span>
@@ -605,19 +610,20 @@ export default function App() {
     const playersWithStats = useMemo((): PlayerWithStats[] => {
         const stats: {[key: string]: { gamesPlayed: number, wins: number }} = {};
         players.forEach(p => { stats[p.id] = { gamesPlayed: 0, wins: 0 }; });
-
+    
         gamesOfActiveSeason.forEach(game => {
             if (!game.players) return;
-            const existingPlayersInGame = game.players.filter(p => p && p.playerId && stats.hasOwnProperty(p.playerId));
-            if (existingPlayersInGame.length === 0) return;
-            const maxScore = Math.max(...existingPlayersInGame.map(p => p.score || 0));
-            if (maxScore > 0) {
-                const winnerIds = existingPlayersInGame.filter(p => p.score === maxScore).map(p => p.playerId);
-                existingPlayersInGame.forEach(p => {
-                    stats[p.playerId].gamesPlayed += 1;
-                    if (winnerIds.includes(p.playerId)) { stats[p.playerId].wins += 1; }
-                });
+            const winner = game.players.find(p => p.rank === 1);
+            if(winner) {
+                 if (stats[winner.playerId]) {
+                    stats[winner.playerId].wins = (stats[winner.playerId].wins || 0) + 1;
+                }
             }
+            game.players.forEach(p => {
+                if (stats[p.playerId]) {
+                   stats[p.playerId].gamesPlayed = (stats[p.playerId].gamesPlayed || 0) + 1;
+                }
+            });
         });
         return players.map(player => ({...player, ...stats[player.id]})).sort((a,b) => b.totalScore - a.totalScore);
     }, [players, gamesOfActiveSeason]);
@@ -643,34 +649,17 @@ export default function App() {
         setView('home');
     };
 
+    // TODO: La logique de mise à jour des parties doit être entièrement revue
     const handleGameUpdate = async (gameToUpdate: Game, newChipCounts: {[key: string]: string}) => {
-        const originalGame = games.find(g => g.id === gameToUpdate.id); if (!originalGame) return;
-        const updatedGamePlayersData = calculateScores(originalGame.players.map(p => ({...p, chipCount: parseInt(newChipCounts[p.playerId], 10) || 0 })));
-        const batch = writeBatch(db);
-        updatedGamePlayersData.forEach(newP => {
-            const oldP = originalGame.players.find(p => p.playerId === newP.playerId);
-            const scoreDiff = newP.score - (oldP ? oldP.score : 0);
-            if (scoreDiff !== 0) {
-                const player = players.find(p => p.id === newP.playerId);
-                if (player) {
-                    const playerRef = doc(db, `artifacts/${appId}/public/data/players`, player.id);
-                    batch.update(playerRef, { totalScore: (player.totalScore || 0) + scoreDiff });
-                }
-            }
-        });
-        const gameRef = doc(db, `artifacts/${appId}/public/data/games`, gameToUpdate.id);
-        batch.update(gameRef, { players: updatedGamePlayersData });
-        await batch.commit();
-        setEditingGame(null);
-        showAlert("Partie mise à jour !", "success");
+        showAlert("La modification de partie n'est pas encore supportée avec le nouveau système de score.", "error");
     };
 
     const handleActivateSeason = async (seasonToActivate: Season, currentLeaderboard: PlayerWithStats[]) => {
         const batch = writeBatch(db);
         if(activeSeason) {
-            const finalLeaderboard = currentLeaderboard.map((p, index) => ({...p, rank: index + 1}));
+            const finalLeaderboardData = currentLeaderboard.map((p, index) => ({...p, rank: index + 1}));
             const oldSeasonRef = doc(db, `artifacts/${appId}/public/data/seasons`, activeSeason.id);
-            batch.update(oldSeasonRef, { isActive: false, isClosed: true, finalLeaderboard: finalLeaderboard });
+            batch.update(oldSeasonRef, { isActive: false, isClosed: true, finalLeaderboard: finalLeaderboardData });
         }
         const newSeasonRef = doc(db, `artifacts/${appId}/public/data/seasons`, seasonToActivate.id);
         batch.update(newSeasonRef, { isActive: true });
