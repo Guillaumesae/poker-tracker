@@ -56,15 +56,21 @@ const firebaseConfig = {
   messagingSenderId: "521443160023",
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
-const ADMIN_PASSWORD = 'pokeradmin';
+const ADMIN_PASSWORD = 'pokeradmin'; // Mot de passe pour les fonctions d'administration
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
 const db: Firestore = getFirestore(app);
 
-const appId = 'default-poker-app';
+// ID unique pour cette instance d'application, utilisé pour le chemin dans Firestore
+const appId = 'default-poker-app'; 
 
-// --- Fonction Utilitaires ---
+// --- Fonction Utilitaire ---
+/**
+ * Calcule les scores pour les joueurs d'une partie en fonction de leur nombre de jetons.
+ * @param gamePlayersWithChips - Un tableau de joueurs avec leurs jetons.
+ * @returns Un tableau de joueurs avec leur score et leur classement pour la partie.
+ */
 const calculateScores = (gamePlayersWithChips: { playerId: string; name: string; chipCount: number }[]): GamePlayer[] => {
     const sortedByChips = [...gamePlayersWithChips].sort((a, b) => b.chipCount - a.chipCount);
     const playerCount = sortedByChips.length;
@@ -109,36 +115,36 @@ const AlertNotification: FC<{ message: string; show: boolean; type?: 'info' | 'e
         success: 'bg-green-500 text-white',
     }
     return (
-        <div className={`fixed top-20 right-5 font-semibold py-3 px-5 rounded-lg shadow-lg z-50 animate-pulse ${colors[type]}`}>
+        <div className={`fixed top-5 right-5 md:top-20 md:right-5 font-semibold py-3 px-5 rounded-lg shadow-lg z-50 animate-pulse`}>
             <p>{message}</p>
         </div>
     );
 };
 
 const PlayerCard: FC<{ player: PlayerWithStats; onRemove: (player: PlayerWithStats) => void; onEdit: (player: PlayerWithStats) => void; isAdmin: boolean }> = ({ player, onRemove, onEdit, isAdmin }) => (
-    <div className="bg-gray-800 p-4 rounded-lg flex items-center justify-between shadow-lg hover:bg-gray-700 transition-all duration-200">
-        <div className="flex items-center space-x-4">
+    <div className="bg-gray-800 p-3 sm:p-4 rounded-lg flex items-center justify-between shadow-lg hover:bg-gray-700 transition-all duration-200">
+        <div className="flex items-center space-x-3 sm:space-x-4">
             <img
                 src={player.imageUrl || `https://placehold.co/60x60/1f2937/ffffff?text=${player.name.charAt(0)}`}
                 alt={player.name}
-                className="w-12 h-12 rounded-full border-2 border-indigo-500 object-cover"
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-indigo-500 object-cover"
                 onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => { e.currentTarget.onerror = null; e.currentTarget.src = `https://placehold.co/60x60/1f2937/ffffff?text=${player.name.charAt(0)}` }}
             />
             <div>
-                <p className="text-lg font-semibold text-white">{player.name}</p>
-                <div className="flex items-center space-x-4 mt-1">
-                    <p className="text-sm text-indigo-400">Score: {player.totalScore || 0}</p>
-                    <p className="text-sm text-gray-400">{player.gamesPlayed} {player.gamesPlayed <= 1 ? 'partie' : 'parties'}</p>
+                <p className="text-md sm:text-lg font-semibold text-white">{player.name}</p>
+                <div className="flex items-center flex-wrap gap-x-3 mt-1">
+                    <p className="text-xs sm:text-sm text-indigo-400">Score: {player.totalScore || 0}</p>
+                    <p className="text-xs sm:text-sm text-gray-400">{player.gamesPlayed} {player.gamesPlayed <= 1 ? 'partie' : 'parties'}</p>
                 </div>
             </div>
         </div>
         {isAdmin && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
                  <button onClick={() => onEdit(player)} className="text-blue-400 hover:text-blue-300 p-2 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors">
-                    <Pencil size={20} />
+                    <Pencil size={18} />
                 </button>
                 <button onClick={() => onRemove(player)} className="text-red-500 hover:text-red-400 p-2 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors">
-                    <Trash2 size={20} />
+                    <Trash2 size={18} />
                 </button>
             </div>
         )}
@@ -151,13 +157,13 @@ const LeaderboardItem: FC<{ player: PlayerWithStats, rank: number }> = ({ player
             case 1: return <Trophy className="text-yellow-400" size={24} />;
             case 2: return <Trophy className="text-gray-300" size={24} />;
             case 3: return <Trophy className="text-amber-600" size={24} />;
-            default: return <span className="text-2xl font-bold w-8 text-center text-gray-400">{rank}</span>;
+            default: return <span className="text-xl md:text-2xl font-bold w-8 text-center text-gray-400">{rank}</span>;
         }
     };
 
     return (
-        <div className="bg-gray-800 p-4 rounded-lg flex items-center justify-between shadow-md">
-            <div className="flex items-center space-x-4">
+        <div className="bg-gray-800 p-3 sm:p-4 rounded-lg flex items-center justify-between shadow-md">
+            <div className="flex items-center space-x-3 sm:space-x-4">
                  <div className="w-8 flex justify-center items-center">
                    <RankDisplay />
                 </div>
@@ -167,14 +173,14 @@ const LeaderboardItem: FC<{ player: PlayerWithStats, rank: number }> = ({ player
                     className="w-10 h-10 rounded-full border-2 border-indigo-500 object-cover"
                 />
                 <div>
-                  <p className="text-lg font-medium text-white">{player.name}</p>
-                   <div className="flex items-center text-sm text-gray-400 divide-x divide-gray-600">
+                  <p className="text-md sm:text-lg font-medium text-white">{player.name}</p>
+                   <div className="flex items-center text-xs sm:text-sm text-gray-400 divide-x divide-gray-600">
                      <p className="pr-2">{player.gamesPlayed} {player.gamesPlayed <= 1 ? 'partie' : 'parties'}</p>
                      <p className="pl-2 flex items-center"><Crown size={14} className="mr-1 text-yellow-500"/>{player.wins} {player.wins <= 1 ? 'victoire' : 'victoires'}</p>
                   </div>
                 </div>
             </div>
-            <div className="text-xl font-bold text-indigo-400">{player.totalScore || 0} pts</div>
+            <div className="text-lg sm:text-xl font-bold text-indigo-400">{player.totalScore || 0} pts</div>
         </div>
     );
 };
@@ -185,13 +191,13 @@ const GameHistoryCard: FC<{ game: Game; players: Player[]; onEdit: (game: Game) 
     const getPlayerImage = (playerId: string) => players.find(p => p.id === playerId)?.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=P`;
 
     return (
-        <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-            <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
-                <h3 className="text-xl font-bold text-indigo-400">Partie du {gameDate}</h3>
-                <div className="flex items-center gap-4">
-                    <span className="text-gray-400 flex items-center"><Users size={16} className="mr-2"/>{game.players.length} Joueurs</span>
+        <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 border-b border-gray-700 pb-3">
+                <h3 className="text-lg sm:text-xl font-bold text-indigo-400 mb-2 sm:mb-0">Partie du {gameDate}</h3>
+                <div className="flex items-center justify-between">
+                    <span className="text-gray-400 flex items-center text-sm"><Users size={16} className="mr-2"/>{game.players.length} Joueurs</span>
                     {isAdmin && (
-                        <button onClick={() => onEdit(game)} className="text-gray-400 hover:text-white transition-colors p-1 rounded-full hover:bg-gray-700">
+                        <button onClick={() => onEdit(game)} className="text-gray-400 hover:text-white transition-colors p-1 rounded-full hover:bg-gray-700 ml-4">
                             <Pencil size={16} />
                         </button>
                     )}
@@ -199,15 +205,15 @@ const GameHistoryCard: FC<{ game: Game; players: Player[]; onEdit: (game: Game) 
             </div>
             <ul className="space-y-3">
                 {sortedPlayers.map((p, index) => (
-                    <li key={p.playerId} className="flex items-center justify-between bg-gray-700 p-3 rounded-md">
+                    <li key={p.playerId} className="flex items-center justify-between bg-gray-700 p-2 sm:p-3 rounded-md text-sm">
                         <div className="flex items-center">
-                             <span className="font-bold text-lg w-6 text-yellow-400">{index + 1}</span>
-                             <img src={getPlayerImage(p.playerId)} alt={p.name} className="w-8 h-8 rounded-full mx-3 object-cover"/>
-                            <span className="text-white">{p.name}</span>
+                             <span className="font-bold text-md sm:text-lg w-6 text-yellow-400">{index + 1}</span>
+                             <img src={getPlayerImage(p.playerId)} alt={p.name} className="w-8 h-8 rounded-full mx-2 sm:mx-3 object-cover"/>
+                            <span className="text-white whitespace-nowrap overflow-hidden text-ellipsis max-w-[100px] sm:max-w-none">{p.name}</span>
                         </div>
-                        <div className="flex items-center">
-                            <span className="text-gray-300 mr-4">Jetons: {p.chipCount}</span>
-                            <span className="font-semibold text-indigo-400">+{p.score} pts</span>
+                        <div className="flex items-center flex-wrap justify-end">
+                            <span className="text-gray-300 mr-2 sm:mr-4 text-xs sm:text-sm">Jetons: {p.chipCount}</span>
+                            <span className="font-semibold text-indigo-400 text-xs sm:text-sm">+{p.score} pts</span>
                         </div>
                     </li>
                 ))}
@@ -319,12 +325,12 @@ const PlayerManagement: FC<{ players: PlayerWithStats[]; isAdmin: boolean }> = (
             />
             
             {isAdmin && (
-                <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-                    <h2 className="text-2xl font-bold text-white mb-4">Ajouter un Joueur</h2>
+                <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg">
+                    <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Ajouter un Joueur</h2>
                     <div className="flex flex-col md:flex-row gap-4">
                         <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nom du joueur" className="flex-grow bg-gray-700 text-white placeholder-gray-400 p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
                         <input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="URL de l'image (optionnel)" className="flex-grow bg-gray-700 text-white placeholder-gray-400 p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-                        <button onClick={addPlayer} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-md flex items-center justify-center transition-colors"><PlusCircle size={20} className="mr-2"/>Ajouter</button>
+                        <button onClick={addPlayer} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 sm:px-6 rounded-md flex items-center justify-center transition-colors"><PlusCircle size={20} className="mr-2"/>Ajouter</button>
                     </div>
                 </div>
             )}
@@ -385,41 +391,43 @@ const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) 
         <div className="relative">
             <AlertNotification message={alert.message} show={alert.show} type={alert.type} />
             {isGameStarted ? (
-                <div className="bg-gray-800 p-6 rounded-lg shadow-lg space-y-4">
-                    <h2 className="text-2xl font-bold text-white mb-4">Saisir les scores</h2>
+                <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg space-y-4">
+                    <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Saisir les scores</h2>
                     {selectedPlayers.map(pId => {
                         const player = players.find(p => p.id === pId);
                         if (!player) return null;
                         return (
-                            <div key={pId} className="flex items-center gap-4">
-                                <img src={player.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full object-cover"/>
-                                <label className="text-white font-medium w-32">{player.name}</label>
-                                <input type="number" min="0" value={chipCounts[pId] || ''} onChange={(e) => handleChipCountChange(pId, e.target.value)} placeholder="Jetons restants" className="flex-grow bg-gray-700 text-white p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+                            <div key={pId} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
+                                <div className="flex items-center gap-3">
+                                  <img src={player.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full object-cover"/>
+                                  <label className="text-white font-medium sm:w-32">{player.name}</label>
+                                </div>
+                                <input type="number" min="0" value={chipCounts[pId] || ''} onChange={(e) => handleChipCountChange(pId, e.target.value)} placeholder="Jetons restants" className="w-full sm:flex-grow bg-gray-700 text-white p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
                             </div>
                         );
                     })}
                     <div className="flex justify-end gap-4 pt-4">
                         <button onClick={() => setIsGameStarted(false)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Retour</button>
-                        <button onClick={finishGame} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">Terminer la Partie</button>
+                        <button onClick={finishGame} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">Terminer</button>
                     </div>
                 </div>
             ) : (
-                <div className="bg-gray-800 p-6 rounded-lg shadow-lg space-y-6">
+                <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg space-y-6">
                     <div>
-                        <h2 className="text-2xl font-bold text-white mb-4">Sélectionner les Joueurs</h2>
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Sélectionner les Joueurs</h2>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                             {players.map(player => (
                                 <div key={player.id} onClick={() => togglePlayerSelection(player.id)} className={`p-3 rounded-lg cursor-pointer transition-all border-2 ${selectedPlayers.includes(player.id) ? 'bg-indigo-600 border-indigo-400' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}>
                                     <div className="flex flex-col items-center text-center">
-                                        <img src={player.imageUrl || `https://placehold.co/80x80/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-16 h-16 rounded-full mb-2 object-cover"/>
-                                        <p className="text-white font-medium">{player.name}</p>
+                                        <img src={player.imageUrl || `https://placehold.co/80x80/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full mb-2 object-cover"/>
+                                        <p className="text-white font-medium text-sm sm:text-base">{player.name}</p>
                                     </div>
                                 </div>
                             ))}
                         </div>
                     </div>
                     <div className="flex justify-center pt-4">
-                        <button onClick={startGame} disabled={selectedPlayers.length < 2} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-md flex items-center justify-center disabled:bg-gray-500 disabled:cursor-not-allowed"><Gamepad2 size={20} className="mr-2"/>Démarrer la Partie ({selectedPlayers.length} joueurs)</button>
+                        <button onClick={startGame} disabled={selectedPlayers.length < 2} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 sm:px-8 rounded-md flex items-center justify-center disabled:bg-gray-500 disabled:cursor-not-allowed w-full sm:w-auto"><Gamepad2 size={20} className="mr-2"/>Démarrer ({selectedPlayers.length})</button>
                     </div>
                 </div>
             )}
@@ -432,13 +440,13 @@ const Leaderboard: FC<{ players: PlayerWithStats[]; isAdmin: boolean; onResetReq
      const sortedPlayers = [...players].sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
     return (
         <div className="space-y-4">
-            <div className="bg-gray-800 p-4 rounded-lg shadow-lg flex items-center justify-between text-yellow-400">
+            <div className="bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col sm:flex-row items-center justify-between text-yellow-400 gap-2">
                 <div className="flex items-center">
                     <Trophy size={24} className="mr-3" />
-                    <h2 className="text-2xl font-bold">Classement Général</h2>
+                    <h2 className="text-xl sm:text-2xl font-bold">Classement Général</h2>
                 </div>
                 {isAdmin && (
-                    <button onClick={onResetRequest} className="bg-red-800 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md flex items-center text-sm"><ShieldAlert size={16} className="mr-2"/>Tout Réinitialiser</button>
+                    <button onClick={onResetRequest} className="bg-red-800 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md flex items-center text-sm w-full sm:w-auto justify-center"><ShieldAlert size={16} className="mr-2"/>Réinitialiser</button>
                 )}
             </div>
             {sortedPlayers.map((player, index) => <LeaderboardItem key={player.id} player={player} rank={index + 1} />)}
@@ -452,7 +460,7 @@ const GameHistory: FC<{ games: Game[]; players: Player[]; onEditGame: (game: Gam
          <div className="space-y-6">
              <div className="bg-gray-800 p-4 rounded-lg shadow-lg flex items-center text-indigo-400">
                 <History size={24} className="mr-3" />
-                <h2 className="text-2xl font-bold">Historique des Parties</h2>
+                <h2 className="text-xl sm:text-2xl font-bold">Historique des Parties</h2>
             </div>
             {sortedGames.length > 0 ? (
                 sortedGames.map(game => <GameHistoryCard key={game.id} game={game} players={players} onEdit={onEditGame} isAdmin={isAdmin} />)
@@ -557,9 +565,11 @@ export default function App() {
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [alert, setAlert] = useState({ show: false, message: '', type: 'info' as 'info' | 'error' | 'success' });
 
+    // Affiche une alerte temporaire
     useEffect(() => { if (alert.show) { const timer = setTimeout(() => setAlert({ show: false, message: '', type: 'info' }), 3000); return () => clearTimeout(timer); } }, [alert]);
     const showAlert = (message: string, type: 'info' | 'error' | 'success' = 'info') => setAlert({ show: true, message, type });
 
+    // Gère l'authentification anonyme de l'utilisateur au démarrage
     useEffect(() => {
         const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
             if (!user) {
@@ -574,6 +584,7 @@ export default function App() {
         return () => unsubscribeAuth();
     }, []);
     
+    // Écoute les changements en temps réel sur les collections Firestore (joueurs et parties)
     useEffect(() => {
         if (!isAuthReady) return;
         setLoading(true);
@@ -594,6 +605,7 @@ export default function App() {
         return () => { unsubPlayers(); unsubGames(); };
     }, [isAuthReady]);
 
+    // Calcule les statistiques des joueurs (parties jouées, victoires)
     const playersWithStats = useMemo((): PlayerWithStats[] => {
         try {
             const stats: {[key: string]: { gamesPlayed: number, wins: number }} = {};
@@ -637,6 +649,7 @@ export default function App() {
         }
     }, [players, games]);
 
+    // Gère la connexion et déconnexion du mode administrateur
     const handleAdminLogin = (password: string) => {
         if (password === ADMIN_PASSWORD) {
             setIsAdmin(true);
@@ -646,9 +659,9 @@ export default function App() {
             showAlert("Mot de passe incorrect", "error");
         }
     };
-    
     const handleAdminLogout = () => { setIsAdmin(false); showAlert("Mode administrateur désactivé"); };
     
+    // Gère la réinitialisation de toutes les données (scores et parties)
     const handleResetScores = async () => {
         if (!isAdmin) return;
         setShowResetConfirm(false);
@@ -668,44 +681,60 @@ export default function App() {
         showAlert("Tous les scores et parties ont été réinitialisés.", "success");
     };
 
+    // Gère la fin d'une partie et la mise à jour des scores
     const handleGameEnd = async (scoredPlayers: GamePlayer[]) => {
+        const batch = writeBatch(db);
         const gamesCollectionRef = collection(db, `artifacts/${appId}/public/data/games`);
-        await addDoc(gamesCollectionRef, { date: new Date(), players: scoredPlayers.map(({ playerId, name, chipCount, score }) => ({ playerId, name, chipCount, score })) });
+        const newGameRef = doc(gamesCollectionRef); // Crée une référence pour obtenir l'ID avant de l'écrire
+    
+        batch.set(newGameRef, { date: new Date(), players: scoredPlayers });
+
         for (const sp of scoredPlayers) {
             const playerRef = doc(db, `artifacts/${appId}/public/data/players`, sp.playerId);
             const player = players.find(p => p.id === sp.playerId);
-            if(player) await updateDoc(playerRef, { totalScore: (player.totalScore || 0) + sp.score });
+            if(player) {
+                 const newTotalScore = (player.totalScore || 0) + sp.score;
+                 batch.update(playerRef, { totalScore: newTotalScore });
+            }
         }
+        await batch.commit();
+        showAlert("La partie a été enregistrée avec succès !", "success");
         setView('home');
     };
 
+    // Gère la mise à jour d'une partie existante
     const handleGameUpdate = async (gameToUpdate: Game, newChipCounts: {[key: string]: string}) => {
         const originalGame = games.find(g => g.id === gameToUpdate.id);
         if (!originalGame) return;
 
-        const updatedPlayers = calculateScores(originalGame.players.map(p => ({...p, chipCount: parseInt(newChipCounts[p.playerId], 10) || 0 })));
+        const updatedGamePlayersData = calculateScores(originalGame.players.map(p => ({...p, chipCount: parseInt(newChipCounts[p.playerId], 10) || 0 })));
         const batch = writeBatch(db);
 
-        updatedPlayers.forEach(newP => {
+        // Calculer la différence de score pour chaque joueur et mettre à jour le score total
+        updatedGamePlayersData.forEach(newP => {
             const oldP = originalGame.players.find(p => p.playerId === newP.playerId);
             const scoreDiff = newP.score - (oldP ? oldP.score : 0);
+            
             if (scoreDiff !== 0) {
                 const player = players.find(p => p.id === newP.playerId);
                 if (player) {
                     const playerRef = doc(db, `artifacts/${appId}/public/data/players`, player.id);
-                    batch.update(playerRef, { totalScore: (player.totalScore || 0) + scoreDiff });
+                    const newTotalScore = (player.totalScore || 0) + scoreDiff;
+                    batch.update(playerRef, { totalScore: newTotalScore });
                 }
             }
         });
 
+        // Mettre à jour la partie elle-même
         const gameRef = doc(db, `artifacts/${appId}/public/data/games`, gameToUpdate.id);
-        batch.update(gameRef, { players: updatedPlayers.map(({ playerId, name, chipCount, score }) => ({ playerId, name, chipCount, score })) });
+        batch.update(gameRef, { players: updatedGamePlayersData });
 
         await batch.commit();
         setEditingGame(null);
         showAlert("Partie mise à jour avec succès !", "success");
     };
 
+    // Composant pour les boutons de navigation
     const NavButton: FC<{ targetView: string; icon: React.ElementType; label: string }> = ({ targetView, icon, label }) => {
         const Icon = icon;
         return (
@@ -716,6 +745,7 @@ export default function App() {
         )
     }
 
+    // Affiche la vue correspondante en fonction de l'état
     const renderView = () => {
         if (loading || !isAuthReady) return <div className="text-center text-white py-10">Chargement des données...</div>
         switch (view) {
@@ -736,12 +766,11 @@ export default function App() {
                  <p className="text-center text-lg italic mb-4">"Un grand pouvoir implique de grandes responsabilités !"</p>
                 <p>Êtes-vous <strong className="text-red-400">ABSOLUMENT</strong> sûr ? Cette action est irréversible et supprimera toutes les données de jeu.</p>
             </ConfirmationModal>
-             <EditPlayerModal show={false} onClose={() => {}} onUpdate={() => {}} player={null} />
 
-            <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-4xl">
-                <header className="text-center mb-8 relative">
-                    <h1 className="text-4xl md:text-5xl font-bold text-indigo-400 tracking-tight">Poker Tracker Pro</h1>
-                    <p className="text-gray-400 mt-2">Suivez vos parties et dominez le classement !</p>
+            <div className="container mx-auto p-2 sm:p-4 md:p-6 lg:p-8 max-w-4xl">
+                <header className="text-center mb-6 sm:mb-8 relative">
+                    <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-indigo-400 tracking-tight">Poker Tracker Pro</h1>
+                    <p className="text-gray-400 mt-2 text-sm sm:text-base">Suivez vos parties et dominez le classement !</p>
                     <div className="absolute top-0 right-0">
                         <button onClick={isAdmin ? handleAdminLogout : () => setShowAdminLogin(true)} className="p-2 rounded-full text-gray-400 hover:text-white hover:bg-gray-700 transition-colors">
                             {isAdmin ? <Unlock /> : <Lock />}
@@ -749,7 +778,7 @@ export default function App() {
                     </div>
                 </header>
 
-                <nav className="flex flex-wrap gap-2 mb-8">
+                <nav className="flex flex-wrap gap-2 mb-6 sm:mb-8">
                     <NavButton targetView="home" icon={Trophy} label="Classement" />
                     <NavButton targetView="players" icon={Users} label="Joueurs" />
                     <NavButton targetView="new_game" icon={Gamepad2} label="Nouvelle Partie" />
