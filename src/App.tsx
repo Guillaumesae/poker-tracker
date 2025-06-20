@@ -21,7 +21,7 @@ import {
     setLogLevel
 } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
-import { Lock, Unlock, PlusCircle, Trash2, Crown, Users, Trophy, Gamepad2, History, Pencil, LayoutGrid, Info, PlayCircle, Archive, ArchiveRestore, RefreshCw, LogOut, Newspaper, Medal, AlertTriangle, BarChart2, Bomb } from 'lucide-react';
+import { Lock, Unlock, PlusCircle, Trash2, Crown, Users, Trophy, Gamepad2, History, Pencil, LayoutGrid, Info, PlayCircle, Archive, ArchiveRestore, RefreshCw, LogOut, Newspaper, Medal, AlertTriangle, BarChart2, Bomb, PiggyBank } from 'lucide-react';
 
 // --- Types TypeScript ---
 interface Player {
@@ -126,7 +126,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "3.0.2";
+const APP_VERSION = "3.1.0";
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -135,6 +135,7 @@ setLogLevel('debug');
 
 const appId = 'default-poker-app'; 
 
+// --- Utility Functions ---
 const formatDate = (timestamp: Timestamp | undefined, format: 'long' | 'short' = 'long') => {
     if (!timestamp) return '';
     const date = new Date(timestamp.seconds * 1000);
@@ -145,6 +146,11 @@ const formatDate = (timestamp: Timestamp | undefined, format: 'long' | 'short' =
         year: 'numeric', month: 'long', day: 'numeric'
     });
 }
+
+const formatNumber = (num: number | undefined | null) => {
+    if (num === null || num === undefined) return 0;
+    return new Intl.NumberFormat('fr-FR').format(num);
+};
 
 // --- UI Components ---
 const ConfirmationModal: FC<{ show: boolean; onClose: () => void; onConfirm: () => void; title: string; children: React.ReactNode; confirmText?: string; confirmColor?: "red" | "blue" }> = ({ show, onClose, onConfirm, title, children, confirmText = "Confirmer", confirmColor = "red" }) => {
@@ -225,7 +231,7 @@ const GameHistoryCard: FC<{ game: Game; players: Player[]; onEdit: (game: Game) 
                             <span className="text-white whitespace-nowrap overflow-hidden text-ellipsis max-w-[100px] sm:max-w-none">{p.name}</span>
                         </div>
                         <div className="flex items-center flex-wrap justify-end">
-                            <span className="text-gray-300 mr-2 sm:mr-4 text-xs sm:text-sm">Jetons: {p.chipCount}</span>
+                            <span className="text-gray-300 mr-2 sm:mr-4 text-xs sm:text-sm">Jetons: {formatNumber(p.chipCount)}</span>
                             <span className="font-semibold text-indigo-400 text-xs sm:text-sm">+{p.score} pts</span>
                         </div>
                     </li>
@@ -442,7 +448,7 @@ const PastSeasons: FC<{seasons: Season[], isAdmin: boolean, onDeleteSeason: (sea
                             {isAdmin && <button onClick={() => onDeleteSeason(season.id)} className="bg-red-800 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-md"><Trash2 size={16}/></button>}
                         </div>
                         {winner && season.prize && (<div className="bg-yellow-900/50 text-yellow-300 p-3 rounded-lg text-center mb-4"><p>🏆 <strong className="font-bold">{winner.name}</strong> a gagné : {season.prize}</p></div>)}
-                        <ul className="space-y-2">{season.finalLeaderboard?.sort((a,b) => (a.rank || 0) - (b.rank || 0)).map(player => <li key={player.id} className="flex items-center justify-between bg-gray-700 p-3 rounded-md"><div className="flex items-center"><span className="font-bold text-lg w-8">{player.rank}</span><img src={player.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full mx-3 object-cover"/><span className="text-white">{player.name}</span></div><div className="font-semibold text-indigo-400">{player.totalScore} pts</div></li>)}</ul>
+                        <ul className="space-y-2">{season.finalLeaderboard?.sort((a,b) => (a.rank || 0) - (b.rank || 0)).map(player => <li key={player.id} className="flex items-center justify-between bg-gray-700 p-3 rounded-md"><div className="flex items-center"><span className="font-bold text-lg w-8">{player.rank}</span><img src={player.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full mx-3 object-cover"/><span className="text-white">{player.name}</span></div><div className="font-semibold text-indigo-400">{formatNumber(player.totalScore)} pts</div></li>)}</ul>
                     </div>
                 );
             })}
@@ -475,7 +481,13 @@ const PlayerProfile: FC<{ player: Player, allGames: Game[], playerAchievements: 
     return (
         <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
             <div className="flex flex-col sm:flex-row items-center gap-6 mb-8"><img src={player.imageUrl || `https://placehold.co/150x150/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-36 h-36 rounded-full border-4 border-indigo-500 object-cover"/><div className="text-center sm:text-left"><h2 className="text-3xl font-bold text-white">{player.name}</h2><p className="text-indigo-400">Statistiques globales</p></div></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><StatCard icon={Gamepad2} emoji="🎮" value={globalStats.totalGamesPlayed} label="Parties Jouées" colorClass="bg-blue-500" /><StatCard icon={Trophy} emoji="🏆" value={globalStats.totalWins} label="Victoires" colorClass="bg-yellow-500" /><StatCard icon={BarChart2} emoji="📊" value={globalStats.averageRank} label="Classement Moyen" colorClass="bg-green-500" /><StatCard icon={Bomb} emoji="😥" value={globalStats.lastPlaceCount} label="Dernières Places" colorClass="bg-red-500" /></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <StatCard icon={Gamepad2} emoji="🎮" value={globalStats.totalGamesPlayed} label="Parties Jouées" colorClass="bg-blue-500" />
+                <StatCard icon={Trophy} emoji="🏆" value={globalStats.totalWins} label="Victoires" colorClass="bg-yellow-500" />
+                <StatCard icon={BarChart2} emoji="📊" value={globalStats.averageRank} label="Classement Moyen" colorClass="bg-green-500" />
+                <StatCard icon={Bomb} emoji="😥" value={globalStats.lastPlaceCount} label="Dernières Places" colorClass="bg-red-500" />
+                <StatCard icon={PiggyBank} emoji="💰" value={formatNumber(player.totalChipsAmassed)} label="Jetons Amassés (Total)" colorClass="bg-pink-500" />
+            </div>
             <div className="mt-8"><h3 className="text-xl font-bold text-white mb-4">Hauts Faits Débloqués</h3>{unlockedAchievements.length > 0 ? <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{unlockedAchievements.map(ach => <div key={ach.id} className="bg-gray-700 p-4 rounded-lg flex items-center gap-4"><span className="text-4xl">{ach.emoji}</span><div><p className="font-bold text-white">{ach.name}</p><p className="text-sm text-gray-400">{ach.description}</p></div></div>)}</div> : <p className="text-gray-400">Aucun haut fait débloqué pour le moment.</p>}</div>
         </div>
     );
@@ -921,15 +933,15 @@ export default function App() {
                     <NavButton targetView="news" icon={Newspaper} label="Actualités" />
                     <NavButton targetView="home" icon={Trophy} label="Classement" />
                     <NavButton targetView="players" icon={Users} label="Joueurs" />
-                    <NavButton targetView="new_game" icon={Gamepad2} label="Nouvelle Partie" />
-                    <NavButton targetView="history" icon={History} label="Historique" />
-                    <NavButton targetView="past_seasons" icon={ArchiveRestore} label="Saisons Passées" />
                     {isAdmin && (
                         <>
+                            <NavButton targetView="new_game" icon={Gamepad2} label="Nouvelle Partie" />
                             <NavButton targetView="seasons" icon={LayoutGrid} label="Gérer Saisons" />
                             <NavButton targetView="achievements_list" icon={Medal} label="Hauts Faits" />
                         </>
                     )}
+                    <NavButton targetView="history" icon={History} label="Historique" />
+                    <NavButton targetView="past_seasons" icon={ArchiveRestore} label="Saisons Passées" />
                 </nav>
 
                 <main>{renderView()}</main>
