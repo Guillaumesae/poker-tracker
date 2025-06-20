@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { FC } from 'react';
-// IMPROVEMENT: Using modern firebase/ modular imports
 import { initializeApp } from 'firebase/app';
 import type { FirebaseApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -19,7 +18,7 @@ import {
     orderBy,
     limit,
     getDocs,
-    setLogLevel // DEBUG: Added for better debugging
+    setLogLevel
 } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import { Lock, Unlock, PlusCircle, Trash2, Crown, Users, Trophy, Gamepad2, History, Pencil, LayoutGrid, Info, PlayCircle, Archive, ArchiveRestore, RefreshCw, LogOut, Newspaper, Medal, AlertTriangle, BarChart2, Bomb } from 'lucide-react';
@@ -71,7 +70,6 @@ interface Achievement {
     emoji: string;
     type: 'permanent' | 'saisonnier';
     newsPhrase: (playerName: string) => string;
-    // IMPROVEMENT: Added a phrase for when a player loses a title.
     lossPhrase?: (playerName: string, newHolderName: string) => string;
 }
 
@@ -111,16 +109,14 @@ const achievementsList: Achievement[] = [
         id: 'red_lantern',
         name: 'La Lanterne Rouge',
         description: 'Être le joueur avec le plus de dernières places durant la saison en cours.',
-        emoji: '�',
+        emoji: '😥',
         type: 'saisonnier',
         newsPhrase: (playerName) => `😥 ${playerName} est la nouvelle Lanterne Rouge de la saison...`,
         lossPhrase: (playerName, newHolderName) => `😥 ${playerName} a passé le flambeau de la Lanterne Rouge à ${newHolderName} !`
     }
 ];
 
-
 // --- Configuration Firebase ---
-// FIX: Restoring hardcoded Firebase config as requested by the user.
 const firebaseConfig = {
   apiKey: "AIzaSyCEUi2n6f44JwoC64hZ0OqdWfsw-_C-qkU",
   authDomain: "poker-score-8eef5.firebaseapp.com",
@@ -130,7 +126,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "2.4.4"; // Version bump
+const APP_VERSION = "2.4.5";
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -150,7 +146,6 @@ const formatDate = (timestamp: Timestamp | undefined, format: 'long' | 'short' =
         year: 'numeric', month: 'long', day: 'numeric'
     });
 }
-
 
 // --- Composants UI ---
 const ConfirmationModal: FC<{ show: boolean; onClose: () => void; onConfirm: () => void; title: string; children: React.ReactNode; confirmText?: string; confirmColor?: "red" | "blue" }> = ({ show, onClose, onConfirm, title, children, confirmText = "Confirmer", confirmColor = "red" }) => {
@@ -384,7 +379,6 @@ const EditGameModal: FC<{ show: boolean; game: Game | null; players: Player[]; o
         const allRankedPlayers = [...survivorRankings, ...eliminatedPlayers].sort((a,b) => a.rank - b.rank);
         
         if(allRankedPlayers.length !== totalPlayers){
-            // FIX: Replaced alert with the notification system
             showAlert("Erreur dans le classement, veuillez vérifier les données.", "error");
             return;
         }
@@ -549,7 +543,6 @@ const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) 
         const allRankedPlayers = [...survivorRankings, ...eliminatedPlayers].sort((a,b) => a.rank - b.rank);
         
         if(allRankedPlayers.length !== totalPlayers){
-            // FIX: Replaced alert with the notification system
             showAlert("Erreur dans le classement, veuillez vérifier les données.", "error");
             return;
         }
@@ -925,7 +918,6 @@ export default function App() {
     useEffect(() => { if (alert.show) { const timer = setTimeout(() => setAlert({ show: false, message: '', type: 'info' }), 3000); return () => clearTimeout(timer); } }, [alert]);
     const showAlert = (message: string, type: 'info' | 'error' | 'success' = 'info') => setAlert({ show: true, message, type });
 
-    // FIX: Restoring original authentication flow.
     useEffect(() => {
         const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
             if (!user) {
@@ -945,7 +937,6 @@ export default function App() {
         if (!isAuthReady) return;
         setLoading(true);
 
-        // IMPROVEMENT: Centralized path definitions
         const playersPath = `artifacts/${appId}/public/data/players`;
         const gamesPath = `artifacts/${appId}/public/data/games`;
         const seasonsPath = `artifacts/${appId}/public/data/seasons`;
@@ -1012,7 +1003,6 @@ export default function App() {
     
         const allGamesWithNewOne = [...allGames, newGame];
     
-        // --- Permanent Achievements ---
         const veteranAchievement = achievementsList.find(a => a.id === 'veteran')!;
         for (const player of allPlayers) { 
             const hasVeteran = playerAchievements.some(pa => pa.playerId === player.id && pa.achievementId === 'veteran');
@@ -1027,7 +1017,6 @@ export default function App() {
             }
         }
     
-        // --- Seasonal Achievements ---
         const seasonalAchievements = achievementsList.filter(a => a.type === 'saisonnier');
         const seasonGames = allGamesWithNewOne.filter(g => g.seasonId === currentActiveSeason.id);
     
@@ -1060,7 +1049,6 @@ export default function App() {
             const leadersChanged = newLeaders.length !== oldLeaders.length || !newLeaders.every(id => oldLeaders.includes(id));
     
             if (leadersChanged) {
-                // FIX: Generate "loss" news for players who lost the title.
                 for (const oldLeaderId of oldLeaders) {
                     if (!newLeaders.includes(oldLeaderId)) {
                         const achievementDoc = playerAchievements.find(pa => pa.playerId === oldLeaderId && pa.achievementId === achievement.id);
@@ -1076,7 +1064,6 @@ export default function App() {
                     }
                 }
     
-                // Generate "gain" news for players who just got the title.
                 for (const newLeaderId of newLeaders) {
                     if (!oldLeaders.includes(newLeaderId)) {
                         const leaderName = allPlayers.find(p => p.id === newLeaderId)?.name || 'Un joueur';
@@ -1093,7 +1080,6 @@ export default function App() {
     };
 
     const handleGameEnd = async (scoredPlayers: GamePlayer[]) => {
-        // BUILD FIX: The 'participants' parameter was declared but not used. It has been removed.
         if (!activeSeason) { showAlert("Aucune saison active pour enregistrer la partie.", "error"); return; }
         const batch = writeBatch(db);
         const newGameRef = doc(collection(db, `artifacts/${appId}/public/data/games`));
@@ -1193,7 +1179,6 @@ export default function App() {
         try {
             const batch = writeBatch(db);
 
-            // Collections to wipe
             const collectionsToWipe = ['games', 'seasons', 'news_feed', 'player_achievements'];
             for (const collectionName of collectionsToWipe) {
                 const collectionRef = collection(db, `artifacts/${appId}/public/data/${collectionName}`);
@@ -1201,7 +1186,6 @@ export default function App() {
                 snapshot.forEach(doc => batch.delete(doc.ref));
             }
             
-            // Reset player scores
             for (const player of players) {
                 const playerRef = doc(db, `artifacts/${appId}/public/data/players`, player.id);
                 batch.update(playerRef, { totalScore: 0 });
@@ -1209,7 +1193,7 @@ export default function App() {
 
             await batch.commit();
             showAlert("Réinitialisation générale terminée avec succès !", "success");
-            setView('news'); // Go back to a safe view
+            setView('news');
         } catch (error) {
             console.error("Error during general reset:", error);
             showAlert("Une erreur est survenue lors de la réinitialisation.", "error");
@@ -1306,4 +1290,3 @@ export default function App() {
         </div>
     );
 }
-�
