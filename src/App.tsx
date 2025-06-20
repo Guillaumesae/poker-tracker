@@ -35,6 +35,9 @@ interface Player {
     firstBloodCount?: number;
     invincibleStreak?: number;
     ventreMouCount?: number;
+    seasonWins?: number;
+    consecutiveSeasonWins?: number;
+    consecutiveGamesStreak?: number;
 }
 
 interface PlayerWithStats extends Player {
@@ -93,6 +96,12 @@ interface NewsItem {
     createdAt: Timestamp;
 }
 
+// --- Utility Functions ---
+const formatNumber = (num: number | undefined | null) => {
+    if (num === null || num === undefined) return 0;
+    return new Intl.NumberFormat('fr-FR').format(num);
+};
+
 // --- Achievements Configuration ---
 const achievementsList: Achievement[] = [
     { id: 'veteran', name: 'Le Vétéran', description: 'Participer à 10 parties (toutes saisons confondues).', emoji: '🎖️', type: 'permanent', newsPhrase: (p) => `🎖️ ${p} est devenu un Vétéran des tables de poker en participant à 10 parties !` },
@@ -100,14 +109,21 @@ const achievementsList: Achievement[] = [
     { id: 'red_lantern', name: 'La Lanterne Rouge', description: 'Être le joueur avec le plus de dernières places durant la saison en cours.', emoji: '😥', type: 'saisonnier', newsPhrase: (p) => `😥 ${p} est la nouvelle Lanterne Rouge de la saison...`, lossPhrase: (p, n) => `😥 ${p} a passé le flambeau de la Lanterne Rouge à ${n} !` },
     { id: 'pillar', name: 'Le Pilier', description: 'Participer à 25 parties (toutes saisons).', emoji: '🏛️', type: 'permanent', newsPhrase: (p) => `🏛️ Avec 25 parties à son actif, ${p} est officiellement un Pilier de la ligue !` },
     { id: 'legend', name: 'La Légende', description: 'Participer à 50 parties (toutes saisons).', emoji: '🗿', type: 'permanent', newsPhrase: (p) => `🗿 Une légende vivante ! ${p} vient de terminer sa 50ème partie !` },
-    { id: 'champion', name: 'Le Champion', description: 'Gagner une saison en terminant à la 1ère place du classement.', emoji: '🏆', type: 'permanent', newsPhrase: (p, details) => `🏆 ${p} est sacré Champion de la saison "${details.seasonName}" !` },
     { id: 'poulidor', name: 'Le Poulidor', description: 'Terminer 10 fois à la deuxième place.', emoji: '🥈', type: 'permanent', newsPhrase: (p) => `🥈 ${p} rejoint le club très fermé des Poulidor avec 10 deuxièmes places !` },
     { id: 'holed_pocket', name: 'La Poche Percée', description: 'Terminer 10 parties avec un tapis de 0 jeton.', emoji: '🕳️', type: 'permanent', newsPhrase: (p) => `🕳️ ${p} prouve sa générosité en terminant sa 10ème partie sans aucun jeton. Quel grand seigneur !` },
     { id: 'eternal_second', name: "L'Éternel Second", description: 'Être le joueur avec le plus de deuxièmes places sur la saison.', emoji: '🥈', type: 'saisonnier', newsPhrase: (p) => `🥈 ${p} prend la tête du classement des deuxièmes places cette saison.` },
     { id: 'kamikaze', name: 'Le Kamikaze', description: 'Être le joueur qui termine le plus souvent avec 0 jeton sur la saison.', emoji: '💥', type: 'saisonnier', newsPhrase: (p) => `💥 ${p} prend la tête du classement des "tapis-volant" avec le plus de sorties à 0 jeton.` },
+    { id: 'assidu', name: "L'Assidu", description: 'Être le joueur présent au plus de parties cette saison.', emoji: '🏃', type: 'saisonnier', newsPhrase: (p) => `🏃 ${p} prouve son assiduité et prend la tête du nombre de participations !`},
+    { id: 'metronome', name: "Le Métronome", description: 'Détenir la plus longue série de participations consécutives cette saison.', emoji: '📅', type: 'saisonnier', newsPhrase: (p) => `📅 Comme une horloge, ${p} prend la tête de la plus longue série de participations consécutives !`},
+    { id: 'champion', name: 'Le Champion', description: 'Gagner une saison en terminant à la 1ère place du classement.', emoji: '🏆', type: 'permanent', newsPhrase: (p, details) => `🏆 ${p} est sacré Champion de la saison "${details.seasonName}" !` },
+    { id: 'double_champion', name: 'Le Double', description: 'Gagner 2 saisons.', emoji: '🏆🏆', type: 'permanent', newsPhrase: (p) => `🏆🏆 Impressionnant ! ${p} remporte sa deuxième saison !` },
+    { id: 'back_to_back', name: 'Le Back-to-Back', description: 'Gagner 2 saisons de suite.', emoji: '�🏆', type: 'permanent', newsPhrase: (p) => `🔁🏆 Le doublé ! ${p} remporte deux saisons consécutives !` },
+    { id: 'dynasty', name: 'La Dynastie', description: 'Gagner 3 saisons.', emoji: '👑👑👑', type: 'permanent', newsPhrase: (p) => `👑👑👑 ${p} établit une véritable dynastie avec 3 saisons remportées !` },
+    { id: 'emperor', name: "L'Empereur", description: 'Gagner 4 saisons.', emoji: '🏰', type: 'permanent', newsPhrase: (p) => `🏰 ${p} n'est plus un simple roi, c'est un Empereur avec 4 titres !` },
+    { id: 'poker_god', name: 'Le Dieu du Poker', description: 'Gagner 5 saisons.', emoji: '🌟', type: 'permanent', newsPhrase: (p) => `🌟 Il est au-dessus du commun des mortels. Saluez ${p}, le nouveau Dieu du Poker !` },
     { id: 'serial_killer', name: 'Le Tueur en Série', description: "Gagner une partie d'au moins 5 joueurs en étant le seul survivant.", emoji: '🔪', type: 'permanent', newsPhrase: (p) => `🔪 Tel un prédateur, ${p} a éliminé tous ses adversaires pour finir seul maître à bord !` },
-    { id: 'evening_millionaire', name: "Le Millionnaire (d'un soir)", description: 'Terminer une partie avec un tapis de plus de 80 000 jetons.', emoji: '💰', type: 'permanent', newsPhrase: (p, details) => `💰 ${p} a fait sauter la banque et termine la partie avec ${details.chipCount} jetons !` },
-    { id: 'magnate', name: 'Le Magnat (d\'un soir)', description: 'Terminer une partie avec un tapis de plus de 130 000 jetons.', emoji: '💎', type: 'permanent', newsPhrase: (p, details) => `💎 Stratosphérique ! ${p} finit avec un tapis de ${details.chipCount} jetons et rentre dans la légende !` },
+    { id: 'evening_millionaire', name: "Le Millionnaire (d'un soir)", description: 'Terminer une partie avec un tapis de plus de 80 000 jetons.', emoji: '💰', type: 'permanent', newsPhrase: (p, details) => `💰 ${p} a fait sauter la banque et termine la partie avec ${formatNumber(details.chipCount)} jetons !` },
+    { id: 'magnate', name: 'Le Magnat (d\'un soir)', description: 'Terminer une partie avec un tapis de plus de 130 000 jetons.', emoji: '💎', type: 'permanent', newsPhrase: (p, details) => `💎 Stratosphérique ! ${p} finit avec un tapis de ${formatNumber(details.chipCount)} jetons et rentre dans la légende !` },
     { id: 'golden_boy', name: 'Le Golden Boy', description: 'Amasser 500 000 jetons au total de toutes les parties.', emoji: '✨', type: 'permanent', newsPhrase: (p) => `✨ ${p} devient un Golden Boy en dépassant les 500 000 jetons amassés en carrière !` },
     { id: 'millionaire', name: 'Le Millionnaire', description: 'Amasser 1 000 000 de jetons au total de toutes les parties.', emoji: '🤑', type: 'permanent', newsPhrase: (p) => `🤑 Incroyable ! ${p} est désormais Millionnaire en jetons, avec plus d'un million amassé en carrière !` },
     { id: 'survivor', name: 'Le Survivant', description: "Finir dernier des survivants, dans une partie d'au moins 6 joueurs, avec un tapis entre 1 et 3000 jetons.", emoji: '🧗', type: 'permanent', newsPhrase: (p) => `🧗 ${p} s'est accroché à la vie comme personne et termine la partie en mode Survivant !` },
@@ -115,6 +131,8 @@ const achievementsList: Achievement[] = [
     { id: 'invincible', name: "L'Invincible", description: 'Jouer 8 parties de suite sans jamais finir dernier.', emoji: '💪', type: 'permanent', newsPhrase: (p) => `💪 Quelle régularité ! ${p} vient d'enchaîner 8 parties sans jamais finir dernier !` },
     { id: 'soft_belly', name: 'Le Ventre Mou', description: 'Terminer 5 fois exactement au milieu du classement (ex: 3e/5, 4e/7).', emoji: '🇨🇭', type: 'permanent', newsPhrase: (p) => `🇨🇭 Ni dans les sommets, ni dans les abysses, ${p} maîtrise l'art de la neutralité et rejoint le club du Ventre Mou.` },
     { id: 'the_bubble', name: 'La Bulle', description: "Être le dernier joueur éliminé avant le vainqueur (finir 2ème) 8 fois.", emoji: '🫧', type: 'permanent', newsPhrase: (p) => `🫧 Si près du but... ${p} est passé maître dans l'art de faire la bulle avec une 8ème deuxième place !` },
+    { id: 'precise', name: 'Le Précis', description: "Terminer une partie avec un tapis qui est un multiple parfait de 10 000.", emoji: '🎯', type: 'permanent', newsPhrase: (p) => `🎯 En plein dans le mille ! ${p} termine avec un compte de jetons parfaitement rond.`},
+    { id: 'collector', name: 'Le Collectionneur', description: "Terminer une partie avec un tapis contenant trois chiffres identiques (ex: 77 700).", emoji: '🎰', type: 'permanent', newsPhrase: (p) => `🎰 Jackpot ! ${p} a aligné les chiffres pour un finish de Collectionneur.`}
 ];
 
 const firebaseConfig = {
@@ -126,7 +144,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "3.1.0";
+const APP_VERSION = "4.0.0";
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -135,7 +153,6 @@ setLogLevel('debug');
 
 const appId = 'default-poker-app'; 
 
-// --- Utility Functions ---
 const formatDate = (timestamp: Timestamp | undefined, format: 'long' | 'short' = 'long') => {
     if (!timestamp) return '';
     const date = new Date(timestamp.seconds * 1000);
@@ -145,11 +162,6 @@ const formatDate = (timestamp: Timestamp | undefined, format: 'long' | 'short' =
     return date.toLocaleDateString('fr-FR', {
         year: 'numeric', month: 'long', day: 'numeric'
     });
-}
-
-const formatNumber = (num: number | undefined | null) => {
-    if (num === null || num === undefined) return 0;
-    return new Intl.NumberFormat('fr-FR').format(num);
 };
 
 // --- UI Components ---
@@ -170,7 +182,7 @@ const PlayerCard: FC<{ player: PlayerWithStats; onRemove: (player: PlayerWithSta
             <div>
                 <p className="text-md sm:text-lg font-semibold text-white">{player.name}</p>
                 <div className="flex items-center flex-wrap gap-x-3 mt-1">
-                    <p className="text-xs sm:text-sm text-indigo-400">Score: {player.totalScore || 0}</p>
+                    <p className="text-xs sm:text-sm text-indigo-400">Score: {formatNumber(player.totalScore || 0)}</p>
                     <p className="text-xs sm:text-sm text-gray-400">{player.gamesPlayed} {player.gamesPlayed <= 1 ? 'partie' : 'parties'}</p>
                 </div>
             </div>
@@ -205,7 +217,7 @@ const LeaderboardItem: FC<{ player: PlayerWithStats; rank: number; onViewProfile
                   </div>
                 </div>
             </div>
-            <div className="text-lg sm:text-xl font-bold text-indigo-400">{player.totalScore || 0} pts</div>
+            <div className="text-lg sm:text-xl font-bold text-indigo-400">{formatNumber(player.totalScore || 0)} pts</div>
         </div>
     );
 };
@@ -310,7 +322,7 @@ const PlayerManagement: FC<{ players: PlayerWithStats[]; isAdmin: boolean; onVie
     const addPlayer = async () => {
         if (!newName.trim()) return;
         const playersCollectionRef = collection(db, `artifacts/${appId}/public/data/players`);
-        await addDoc(playersCollectionRef, { name: newName, imageUrl: imageUrl, totalScore: 0, totalChipsAmassed: 0, secondPlaceCount: 0, zeroChipCount: 0, firstBloodCount: 0, invincibleStreak: 0, ventreMouCount: 0 });
+        await addDoc(playersCollectionRef, { name: newName, imageUrl: imageUrl, totalScore: 0, totalChipsAmassed: 0, secondPlaceCount: 0, zeroChipCount: 0, firstBloodCount: 0, invincibleStreak: 0, ventreMouCount: 0, seasonWins: 0, consecutiveSeasonWins: 0, consecutiveGamesStreak: 0 });
         setNewName(''); setImageUrl('');
     };
     const handleRemoveClick = (player: PlayerWithStats) => { setPlayerToRemove(player); setShowConfirmModal(true); };
@@ -601,16 +613,14 @@ export default function App() {
     };
     const handleAdminLogout = () => { setIsAdmin(false); showAlert("Mode administrateur désactivé"); };
     
-    const checkAchievements = async (newGame: Game, updatedPlayers: Player[], allGames: Game[], currentActiveSeason: Season | null) => {
+    const checkAchievements = async (newGame: Game, updatedPlayers: Player[], allGames: Game[], currentActiveSeason: Season | null, batch: any) => {
         if (!currentActiveSeason) return;
-        const batch = writeBatch(db);
         const newsCollection = collection(db, `artifacts/${appId}/public/data/news_feed`);
         const playerAchievementsCollection = collection(db, `artifacts/${appId}/public/data/player_achievements`);
 
         for (const p of newGame.players) {
             const player = updatedPlayers.find(up => up.id === p.playerId);
             if (!player) continue;
-
             const hasAchievement = (id: string) => playerAchievements.some(pa => pa.playerId === player.id && pa.achievementId === id);
 
             if (!hasAchievement('serial_killer') && newGame.players.length >= 5 && p.rank === 1 && newGame.players.filter(gp => gp.chipCount > 0).length === 1) {
@@ -628,51 +638,29 @@ export default function App() {
                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'survivor', unlockedAt: Timestamp.now() });
                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'survivor')!.newsPhrase(player.name), createdAt: Timestamp.now() });
             }
+            if (!hasAchievement('precise') && p.chipCount > 0 && p.chipCount % 10000 === 0) {
+                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'precise', unlockedAt: Timestamp.now() });
+                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'precise')!.newsPhrase(player.name), createdAt: Timestamp.now() });
+            }
+            const chipString = p.chipCount.toString();
+            const hasTriple = /(\d)\1\1/.test(chipString);
+            if (!hasAchievement('collector') && p.chipCount > 0 && hasTriple) {
+                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'collector', unlockedAt: Timestamp.now() });
+                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'collector')!.newsPhrase(player.name), createdAt: Timestamp.now() });
+            }
 
             const allPlayerGames = [...allGames, newGame].filter(g => g.players.some(gp => gp.playerId === player.id));
-            if (!hasAchievement('veteran') && allPlayerGames.length >= 10) {
-                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'veteran', unlockedAt: Timestamp.now() });
-                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'veteran')!.newsPhrase(player.name), createdAt: Timestamp.now() });
-            }
-             if (!hasAchievement('pillar') && allPlayerGames.length >= 25) {
-                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'pillar', unlockedAt: Timestamp.now() });
-                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'pillar')!.newsPhrase(player.name), createdAt: Timestamp.now() });
-            }
-             if (!hasAchievement('legend') && allPlayerGames.length >= 50) {
-                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'legend', unlockedAt: Timestamp.now() });
-                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'legend')!.newsPhrase(player.name), createdAt: Timestamp.now() });
-            }
-            if (!hasAchievement('poulidor') && (player.secondPlaceCount || 0) >= 10) {
-                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'poulidor', unlockedAt: Timestamp.now() });
-                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'poulidor')!.newsPhrase(player.name), createdAt: Timestamp.now() });
-            }
-             if (!hasAchievement('holed_pocket') && (player.zeroChipCount || 0) >= 10) {
-                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'holed_pocket', unlockedAt: Timestamp.now() });
-                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'holed_pocket')!.newsPhrase(player.name), createdAt: Timestamp.now() });
-            }
-             if (!hasAchievement('first_blood') && (player.firstBloodCount || 0) >= 5) {
-                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'first_blood', unlockedAt: Timestamp.now() });
-                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'first_blood')!.newsPhrase(player.name), createdAt: Timestamp.now() });
-            }
-             if (!hasAchievement('invincible') && (player.invincibleStreak || 0) >= 8) {
-                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'invincible', unlockedAt: Timestamp.now() });
-                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'invincible')!.newsPhrase(player.name), createdAt: Timestamp.now() });
-            }
-            if (!hasAchievement('soft_belly') && (player.ventreMouCount || 0) >= 5) {
-                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'soft_belly', unlockedAt: Timestamp.now() });
-                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'soft_belly')!.newsPhrase(player.name), createdAt: Timestamp.now() });
-            }
-             if (!hasAchievement('the_bubble') && (player.secondPlaceCount || 0) >= 8) {
-                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'the_bubble', unlockedAt: Timestamp.now() });
-                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'the_bubble')!.newsPhrase(player.name), createdAt: Timestamp.now() });
-            }
-            if (!hasAchievement('millionaire') && (player.totalChipsAmassed || 0) >= 1000000) {
-                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'millionaire', unlockedAt: Timestamp.now() });
-                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'millionaire')!.newsPhrase(player.name), createdAt: Timestamp.now() });
-            } else if (!hasAchievement('golden_boy') && (player.totalChipsAmassed || 0) >= 500000) {
-                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'golden_boy', unlockedAt: Timestamp.now() });
-                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'golden_boy')!.newsPhrase(player.name), createdAt: Timestamp.now() });
-            }
+            if (!hasAchievement('veteran') && allPlayerGames.length >= 10) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'veteran', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'veteran')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
+            if (!hasAchievement('pillar') && allPlayerGames.length >= 25) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'pillar', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'pillar')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
+            if (!hasAchievement('legend') && allPlayerGames.length >= 50) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'legend', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'legend')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
+            if (!hasAchievement('poulidor') && (player.secondPlaceCount || 0) >= 10) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'poulidor', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'poulidor')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
+            if (!hasAchievement('holed_pocket') && (player.zeroChipCount || 0) >= 10) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'holed_pocket', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'holed_pocket')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
+            if (!hasAchievement('first_blood') && (player.firstBloodCount || 0) >= 5) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'first_blood', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'first_blood')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
+            if (!hasAchievement('invincible') && (player.invincibleStreak || 0) >= 8) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'invincible', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'invincible')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
+            if (!hasAchievement('soft_belly') && (player.ventreMouCount || 0) >= 5) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'soft_belly', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'soft_belly')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
+            if (!hasAchievement('the_bubble') && (player.secondPlaceCount || 0) >= 8) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'the_bubble', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'the_bubble')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
+            if (!hasAchievement('millionaire') && (player.totalChipsAmassed || 0) >= 1000000) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'millionaire', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'millionaire')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
+            else if (!hasAchievement('golden_boy') && (player.totalChipsAmassed || 0) >= 500000) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'golden_boy', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'golden_boy')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
         }
 
         const seasonGames = [...allGames, newGame].filter(g => g.seasonId === currentActiveSeason.id);
@@ -681,10 +669,12 @@ export default function App() {
             const playerStats: { [playerId: string]: number } = {};
             updatedPlayers.forEach(p => playerStats[p.id] = 0);
 
-            if(achievement.id === 'conqueror') seasonGames.forEach(g => { const winner = g.players.find(p => p.rank === 1); if (winner) playerStats[winner.playerId]++; });
-            if(achievement.id === 'red_lantern') seasonGames.forEach(g => { const loser = g.players.find(p => p.rank === g.players.length); if (loser) playerStats[loser.playerId]++; });
-            if(achievement.id === 'eternal_second') seasonGames.forEach(g => { const second = g.players.find(p => p.rank === 2); if (second) playerStats[second.playerId]++; });
-            if(achievement.id === 'kamikaze') seasonGames.forEach(g => { g.players.forEach(p => { if(p.chipCount === 0) playerStats[p.playerId]++; }); });
+            if (achievement.id === 'assidu') seasonGames.forEach(g => { g.players.forEach(p => playerStats[p.playerId]++); });
+            else if (achievement.id === 'metronome') updatedPlayers.forEach(p => { playerStats[p.id] = p.consecutiveGamesStreak || 0; });
+            else if (achievement.id === 'conqueror') seasonGames.forEach(g => { const winner = g.players.find(p => p.rank === 1); if (winner) playerStats[winner.playerId]++; });
+            else if (achievement.id === 'red_lantern') seasonGames.forEach(g => { const loser = g.players.find(p => p.rank === g.players.length); if (loser) playerStats[loser.playerId]++; });
+            else if (achievement.id === 'eternal_second') seasonGames.forEach(g => { const second = g.players.find(p => p.rank === 2); if (second) playerStats[second.playerId]++; });
+            else if (achievement.id === 'kamikaze') seasonGames.forEach(g => { g.players.forEach(p => { if(p.chipCount === 0) playerStats[p.playerId]++; }); });
             
             const maxStat = Math.max(...Object.values(playerStats));
             if (maxStat === 0) continue;
@@ -716,8 +706,6 @@ export default function App() {
                 });
             }
         }
-
-        await batch.commit();
     };
 
     const handleGameEnd = async (scoredPlayers: GamePlayer[]) => {
@@ -728,50 +716,52 @@ export default function App() {
         batch.set(newGameRef, newGameData);
         const updatedPlayersData: Player[] = JSON.parse(JSON.stringify(players));
 
-        for (const sp of scoredPlayers) {
-            const playerIndex = updatedPlayersData.findIndex(p => p.id === sp.playerId);
-            if (playerIndex === -1) continue;
+        for (const player of updatedPlayersData) {
+            const gamePlayer = scoredPlayers.find(sp => sp.playerId === player.id);
+            const playerRef = doc(db, `artifacts/${appId}/public/data/players`, player.id);
+            
+            player.totalChipsAmassed = player.totalChipsAmassed || 0;
+            player.secondPlaceCount = player.secondPlaceCount || 0;
+            player.zeroChipCount = player.zeroChipCount || 0;
+            player.firstBloodCount = player.firstBloodCount || 0;
+            player.invincibleStreak = player.invincibleStreak || 0;
+            player.ventreMouCount = player.ventreMouCount || 0;
+            player.consecutiveGamesStreak = player.consecutiveGamesStreak || 0;
 
-            const playerRef = doc(db, `artifacts/${appId}/public/data/players`, sp.playerId);
-            const playerData = updatedPlayersData[playerIndex];
-            
-            playerData.totalScore = (playerData.totalScore || 0) + sp.score;
-            playerData.totalChipsAmassed = (playerData.totalChipsAmassed || 0) + sp.chipCount;
-            playerData.secondPlaceCount = playerData.secondPlaceCount || 0;
-            playerData.zeroChipCount = playerData.zeroChipCount || 0;
-            playerData.firstBloodCount = playerData.firstBloodCount || 0;
-            playerData.invincibleStreak = playerData.invincibleStreak || 0;
-            playerData.ventreMouCount = playerData.ventreMouCount || 0;
-            
-            if (sp.rank === 2) playerData.secondPlaceCount++;
-            if (sp.chipCount === 0) playerData.zeroChipCount++;
-            if (sp.rank === scoredPlayers.length) {
-                playerData.firstBloodCount++;
-                playerData.invincibleStreak = 0; 
+            if (gamePlayer) {
+                player.totalScore = (player.totalScore || 0) + gamePlayer.score;
+                player.totalChipsAmassed += gamePlayer.chipCount;
+                if (gamePlayer.rank === 2) player.secondPlaceCount++;
+                if (gamePlayer.chipCount === 0) player.zeroChipCount++;
+                if (gamePlayer.rank === scoredPlayers.length) {
+                    player.firstBloodCount++;
+                    player.invincibleStreak = 0; 
+                } else {
+                    player.invincibleStreak++;
+                }
+                if (scoredPlayers.length % 2 !== 0 && gamePlayer.rank === Math.ceil(scoredPlayers.length / 2)) {
+                    player.ventreMouCount++;
+                }
+                player.consecutiveGamesStreak++;
             } else {
-                playerData.invincibleStreak++;
-            }
-            if (scoredPlayers.length % 2 !== 0 && sp.rank === Math.ceil(scoredPlayers.length / 2)) {
-                playerData.ventreMouCount++;
+                player.consecutiveGamesStreak = 0;
             }
             
             batch.update(playerRef, {
-                totalScore: playerData.totalScore,
-                totalChipsAmassed: playerData.totalChipsAmassed,
-                secondPlaceCount: playerData.secondPlaceCount,
-                zeroChipCount: playerData.zeroChipCount,
-                firstBloodCount: playerData.firstBloodCount,
-                invincibleStreak: playerData.invincibleStreak,
-                ventreMouCount: playerData.ventreMouCount
+                totalScore: player.totalScore,
+                totalChipsAmassed: player.totalChipsAmassed,
+                secondPlaceCount: player.secondPlaceCount,
+                zeroChipCount: player.zeroChipCount,
+                firstBloodCount: player.firstBloodCount,
+                invincibleStreak: player.invincibleStreak,
+                ventreMouCount: player.ventreMouCount,
+                consecutiveGamesStreak: player.consecutiveGamesStreak
             });
         }
+        await checkAchievements({id: newGameRef.id, ...newGameData, date: Timestamp.fromDate(newGameData.date)}, updatedPlayersData, games, activeSeason, batch);
         await batch.commit();
         showAlert("La partie a été enregistrée !", "success");
         setView('news');
-
-        if (activeSeason) {
-            await checkAchievements({id: newGameRef.id, ...newGameData, date: Timestamp.fromDate(newGameData.date)}, updatedPlayersData, games, activeSeason);
-        }
     };
 
     const handleGameUpdate = async (gameToUpdate: Game, newPlayers: GamePlayer[]) => {
@@ -802,20 +792,59 @@ export default function App() {
     const handleActivateSeason = async (seasonToActivate: Season, currentLeaderboard: PlayerWithStats[]) => {
         const batch = writeBatch(db);
         if(activeSeason) {
-            const sortedLeaderboard = [...currentLeaderboard].sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
-            const finalLeaderboardData = sortedLeaderboard.map((p, index) => {
-                const {id, name, imageUrl, totalScore, gamesPlayed, wins} = p;
-                return {id, name, imageUrl, totalScore, gamesPlayed, wins, rank: index + 1};
-            });
+            const winner = currentLeaderboard.sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0))[0];
+            if (winner) {
+                const winnerRef = doc(db, `artifacts/${appId}/public/data/players`, winner.id);
+                const winnerData = players.find(p => p.id === winner.id);
+                if(winnerData) {
+                    const newSeasonWins = (winnerData.seasonWins || 0) + 1;
+                    let newConsecutiveWins = winnerData.consecutiveSeasonWins || 0;
+                    const allClosedSeasons = seasons.filter(s => s.isClosed).sort((a,b) => b.endDate.seconds - a.endDate.seconds);
+                    const lastClosedSeason = allClosedSeasons[0];
+
+                    if(lastClosedSeason && lastClosedSeason.finalLeaderboard && lastClosedSeason.finalLeaderboard[0]?.id === winner.id) {
+                        newConsecutiveWins++;
+                    } else {
+                        newConsecutiveWins = 1;
+                    }
+                    
+                    batch.update(winnerRef, { seasonWins: newSeasonWins, consecutiveSeasonWins: newConsecutiveWins });
+
+                    const hasAchievement = (id: string) => playerAchievements.some(pa => pa.playerId === winner.id && pa.achievementId === id);
+
+                    if (!hasAchievement('champion')) {
+                        batch.set(doc(collection(db, `artifacts/${appId}/public/data/player_achievements`)), { playerId: winner.id, achievementId: 'champion', unlockedAt: Timestamp.now() });
+                        batch.set(doc(collection(db, `artifacts/${appId}/public/data/news_feed`)), { text: achievementsList.find(a => a.id === 'champion')!.newsPhrase(winner.name, {seasonName: activeSeason.name}), createdAt: Timestamp.now() });
+                    }
+
+                    const dynastyAchievements = {'poker_god': 5, 'emperor': 4, 'dynasty': 3, 'double_champion': 2, 'back_to_back': 2 };
+
+                    for (const [id, count] of Object.entries(dynastyAchievements)) {
+                        if(!hasAchievement(id)) {
+                            const isConsecutiveCheck = id === 'back_to_back';
+                            const winCount = isConsecutiveCheck ? newConsecutiveWins : newSeasonWins;
+                            if(winCount >= count) {
+                                batch.set(doc(collection(db, `artifacts/${appId}/public/data/player_achievements`)), { playerId: winner.id, achievementId: id, unlockedAt: Timestamp.now() });
+                                batch.set(doc(collection(db, `artifacts/${appId}/public/data/news_feed`)), { text: achievementsList.find(a => a.id === id)!.newsPhrase(winner.name, {seasonName: activeSeason.name}), createdAt: Timestamp.now() });
+                            }
+                        }
+                    }
+                }
+            }
             const oldSeasonRef = doc(db, `artifacts/${appId}/public/data/seasons`, activeSeason.id);
-            batch.update(oldSeasonRef, { isActive: false, isClosed: true, finalLeaderboard: finalLeaderboardData });
+            batch.update(oldSeasonRef, { isActive: false, isClosed: true, finalLeaderboard: currentLeaderboard.map((p, index) => ({...p, rank: index + 1})) });
         }
+
         const newSeasonRef = doc(db, `artifacts/${appId}/public/data/seasons`, seasonToActivate.id);
         batch.update(newSeasonRef, { isActive: true });
         players.forEach(player => {
             const playerRef = doc(db, `artifacts/${appId}/public/data/players`, player.id);
-            batch.update(playerRef, { totalScore: 0 });
+            batch.update(playerRef, { totalScore: 0, consecutiveGamesStreak: 0 });
+            if(player.id !== activeSeason?.finalLeaderboard?.[0]?.id) {
+                batch.update(playerRef, { consecutiveSeasonWins: 0 });
+            }
         });
+
         await batch.commit();
         showAlert(`La saison "${seasonToActivate.name}" est maintenant active !`, "success");
         setView('news');
@@ -855,7 +884,7 @@ export default function App() {
             }
             for (const player of players) {
                 const playerRef = doc(db, `artifacts/${appId}/public/data/players`, player.id);
-                batch.update(playerRef, { totalScore: 0, totalChipsAmassed: 0, secondPlaceCount: 0, zeroChipCount: 0, firstBloodCount: 0, invincibleStreak: 0, ventreMouCount: 0 });
+                batch.update(playerRef, { totalScore: 0, totalChipsAmassed: 0, secondPlaceCount: 0, zeroChipCount: 0, firstBloodCount: 0, invincibleStreak: 0, ventreMouCount: 0, seasonWins: 0, consecutiveSeasonWins: 0, consecutiveGamesStreak: 0 });
             }
             await batch.commit();
             showAlert("Réinitialisation générale terminée avec succès !", "success");
@@ -880,7 +909,7 @@ export default function App() {
             case 'news': return <NewsFeed news={newsFeed} />;
             case 'home': return <Leaderboard players={playersWithStats} onViewProfile={handleViewProfile}/>;
             case 'players': return <PlayerManagement players={playersWithStats} isAdmin={isAdmin} onViewProfile={handleViewProfile}/>;
-            case 'new_game': return <NewGame players={players} onGameEnd={handleGameEnd} activeSeason={activeSeason} showAlert={showAlert}/>;
+            case 'new_game': return isAdmin ? <NewGame players={players} onGameEnd={handleGameEnd} activeSeason={activeSeason} showAlert={showAlert}/> : <div className='text-center text-gray-400 p-8 bg-gray-800 rounded-lg'>Vous devez être administrateur pour créer une partie.</div>;
             case 'history': return <GameHistory games={gamesOfActiveSeason} players={players} onEditGame={(game: Game) => setEditingGame(game)} isAdmin={isAdmin} />;
             case 'seasons': return <SeasonManagement seasons={seasons} playersWithStats={playersWithStats} onActivateSeason={handleActivateSeason} onEditSeason={setEditingSeason} showAlert={showAlert} onGeneralReset={() => setShowResetConfirm(true)} />;
             case 'past_seasons': return <PastSeasons seasons={seasons} isAdmin={isAdmin} onDeleteSeason={handleDeleteSeason} />;
@@ -933,15 +962,15 @@ export default function App() {
                     <NavButton targetView="news" icon={Newspaper} label="Actualités" />
                     <NavButton targetView="home" icon={Trophy} label="Classement" />
                     <NavButton targetView="players" icon={Users} label="Joueurs" />
+                    {isAdmin && <NavButton targetView="new_game" icon={Gamepad2} label="Nouvelle Partie" />}
+                    <NavButton targetView="history" icon={History} label="Historique" />
+                    <NavButton targetView="past_seasons" icon={ArchiveRestore} label="Saisons Passées" />
                     {isAdmin && (
                         <>
-                            <NavButton targetView="new_game" icon={Gamepad2} label="Nouvelle Partie" />
                             <NavButton targetView="seasons" icon={LayoutGrid} label="Gérer Saisons" />
                             <NavButton targetView="achievements_list" icon={Medal} label="Hauts Faits" />
                         </>
                     )}
-                    <NavButton targetView="history" icon={History} label="Historique" />
-                    <NavButton targetView="past_seasons" icon={ArchiveRestore} label="Saisons Passées" />
                 </nav>
 
                 <main>{renderView()}</main>
