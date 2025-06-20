@@ -71,6 +71,8 @@ interface Achievement {
     emoji: string;
     type: 'permanent' | 'saisonnier';
     newsPhrase: (playerName: string) => string;
+    // IMPROVEMENT: Added a phrase for when a player loses a title.
+    lossPhrase?: (playerName: string, newHolderName: string) => string;
 }
 
 interface PlayerAchievement {
@@ -102,7 +104,8 @@ const achievementsList: Achievement[] = [
         description: 'Être le joueur avec le plus de victoires (1ère place) durant la saison en cours.',
         emoji: '👑',
         type: 'saisonnier',
-        newsPhrase: (playerName) => `👑 ${playerName} s'empare du titre de Conquérant de la saison avec le plus de victoires !`
+        newsPhrase: (playerName) => `👑 ${playerName} s'empare du titre de Conquérant de la saison avec le plus de victoires !`,
+        lossPhrase: (playerName, newHolderName) => `👑 ${playerName} a perdu son titre de Conquérant au profit de ${newHolderName} !`
     },
     {
         id: 'red_lantern',
@@ -110,7 +113,8 @@ const achievementsList: Achievement[] = [
         description: 'Être le joueur avec le plus de dernières places durant la saison en cours.',
         emoji: '😥',
         type: 'saisonnier',
-        newsPhrase: (playerName) => `😥 ${playerName} est la nouvelle Lanterne Rouge de la saison...`
+        newsPhrase: (playerName) => `😥 ${playerName} est la nouvelle Lanterne Rouge de la saison...`,
+        lossPhrase: (playerName, newHolderName) => `😥 ${playerName} a passé le flambeau de la Lanterne Rouge à ${newHolderName} !`
     }
 ];
 
@@ -126,7 +130,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "2.4.0"; // Version bump
+const APP_VERSION = "2.4.2"; // Version bump
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -999,23 +1003,22 @@ export default function App() {
     };
     const handleAdminLogout = () => { setIsAdmin(false); showAlert("Mode administrateur désactivé"); };
     
-    // FIX: Reworked the achievement logic to be more robust and complete.
-    const checkAchievements = async (newGame: Game, participants: Player[], allGames: Game[], currentActiveSeason: Season | null) => {
+    const checkAchievements = async (newGame: Game, allPlayers: Player[], allGames: Game[], currentActiveSeason: Season | null) => {
         if (!currentActiveSeason) return;
-
+    
         const batch = writeBatch(db);
         const newsCollection = collection(db, `artifacts/${appId}/public/data/news_feed`);
         const playerAchievementsCollection = collection(db, `artifacts/${appId}/public/data/player_achievements`);
-
+    
         const allGamesWithNewOne = [...allGames, newGame];
-
+    
         // --- Permanent Achievements ---
         const veteranAchievement = achievementsList.find(a => a.id === 'veteran')!;
-        for(const player of participants) {
+        for (const player of allPlayers) { 
             const hasVeteran = playerAchievements.some(pa => pa.playerId === player.id && pa.achievementId === 'veteran');
-            if(!hasVeteran) {
+            if (!hasVeteran) {
                 const totalGamesPlayed = allGamesWithNewOne.filter(g => g.players.some(p => p.playerId === player.id)).length;
-                if(totalGamesPlayed >= 10) {
+                if (totalGamesPlayed >= 10) {
                     const newAchievementRef = doc(playerAchievementsCollection);
                     batch.set(newAchievementRef, { playerId: player.id, achievementId: 'veteran', unlockedAt: Timestamp.now() });
                     const newNewsRef = doc(newsCollection);
@@ -1023,56 +1026,69 @@ export default function App() {
                 }
             }
         }
-
+    
         // --- Seasonal Achievements ---
         const seasonalAchievements = achievementsList.filter(a => a.type === 'saisonnier');
         const seasonGames = allGamesWithNewOne.filter(g => g.seasonId === currentActiveSeason.id);
-
-        for(const achievement of seasonalAchievements) {
+    
+        for (const achievement of seasonalAchievements) {
             const playerStats: { [playerId: string]: number } = {};
-            participants.forEach(p => playerStats[p.id] = 0);
-
+            allPlayers.forEach(p => playerStats[p.id] = 0);
+    
             if (achievement.id === 'conqueror') {
                 seasonGames.forEach(g => {
                     const winner = g.players.find(p => p.rank === 1);
-                    if(winner && playerStats.hasOwnProperty(winner.playerId)) {
+                    if (winner && playerStats.hasOwnProperty(winner.playerId)) {
                         playerStats[winner.playerId]++;
                     }
                 });
             } else if (achievement.id === 'red_lantern') {
                 seasonGames.forEach(g => {
                     const loser = g.players.find(p => p.rank === g.players.length);
-                    if(loser && playerStats.hasOwnProperty(loser.playerId)) {
+                    if (loser && playerStats.hasOwnProperty(loser.playerId)) {
                         playerStats[loser.playerId]++;
                     }
                 });
             }
-            
+    
             const maxStat = Math.max(...Object.values(playerStats));
-            if (maxStat === 0) continue; // No one has met the criteria yet
-
+            if (maxStat === 0) continue; 
+    
             const newLeaders = Object.keys(playerStats).filter(id => playerStats[id] === maxStat);
             const oldLeaders = playerAchievements.filter(pa => pa.achievementId === achievement.id).map(pa => pa.playerId);
-            
-            const leadersChanged = newLeaders.length !== oldLeaders.length || newLeaders.some(id => !oldLeaders.includes(id));
-
+    
+            const leadersChanged = newLeaders.length !== oldLeaders.length || !newLeaders.every(id => oldLeaders.includes(id));
+    
             if (leadersChanged) {
-                // Revoke from old leaders
-                playerAchievements.filter(pa => pa.achievementId === achievement.id).forEach(ach => {
-                    batch.delete(doc(db, `artifacts/${appId}/public/data/player_achievements`, ach.id));
-                });
-                
-                // Grant to new leaders
-                for (const leaderId of newLeaders) {
-                    const leaderName = players.find(p => p.id === leaderId)?.name || 'Un joueur';
-                    const newAchievementRef = doc(playerAchievementsCollection);
-                    batch.set(newAchievementRef, { playerId: leaderId, achievementId: achievement.id, unlockedAt: Timestamp.now() });
-                    const newNewsRef = doc(newsCollection);
-                    batch.set(newNewsRef, { text: achievement.newsPhrase(leaderName), createdAt: Timestamp.now() });
+                // FIX: Generate "loss" news for players who lost the title.
+                for (const oldLeaderId of oldLeaders) {
+                    if (!newLeaders.includes(oldLeaderId)) {
+                        const achievementDoc = playerAchievements.find(pa => pa.playerId === oldLeaderId && pa.achievementId === achievement.id);
+                        if (achievementDoc) {
+                            batch.delete(doc(db, `artifacts/${appId}/public/data/player_achievements`, achievementDoc.id));
+                            if (achievement.lossPhrase && newLeaders.length > 0) {
+                                const oldLeaderName = allPlayers.find(p => p.id === oldLeaderId)?.name || 'Un ancien';
+                                const newLeaderName = allPlayers.find(p => p.id === newLeaders[0])?.name || 'Un nouveau';
+                                const newNewsRef = doc(newsCollection);
+                                batch.set(newNewsRef, { text: achievement.lossPhrase(oldLeaderName, newLeaderName), createdAt: Timestamp.now() });
+                            }
+                        }
+                    }
+                }
+    
+                // Generate "gain" news for players who just got the title.
+                for (const newLeaderId of newLeaders) {
+                    if (!oldLeaders.includes(newLeaderId)) {
+                        const leaderName = allPlayers.find(p => p.id === newLeaderId)?.name || 'Un joueur';
+                        const newAchievementRef = doc(playerAchievementsCollection);
+                        batch.set(newAchievementRef, { playerId: newLeaderId, achievementId: achievement.id, unlockedAt: Timestamp.now() });
+                        const newNewsRef = doc(newsCollection);
+                        batch.set(newNewsRef, { text: achievement.newsPhrase(leaderName), createdAt: Timestamp.now() });
+                    }
                 }
             }
         }
-        
+    
         await batch.commit();
     };
 
@@ -1091,7 +1107,7 @@ export default function App() {
         showAlert("La partie a été enregistrée !", "success");
         setView('news');
 
-        await checkAchievements({id: newGameRef.id, ...newGameData, date: Timestamp.fromDate(newGameData.date)}, participants, games, activeSeason);
+        await checkAchievements({id: newGameRef.id, ...newGameData, date: Timestamp.fromDate(newGameData.date)}, players, games, activeSeason);
     };
 
     const handleGameUpdate = async (gameToUpdate: Game, newPlayers: GamePlayer[]) => {
