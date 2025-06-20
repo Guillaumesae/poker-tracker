@@ -21,7 +21,7 @@ import {
     setLogLevel
 } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
-import { Lock, Unlock, PlusCircle, Trash2, Crown, Users, Trophy, Gamepad2, History, Pencil, LayoutGrid, Info, PlayCircle, Archive, ArchiveRestore, RefreshCw, LogOut, Newspaper, Medal, AlertTriangle, BarChart2, Bomb, PiggyBank } from 'lucide-react';
+import { Lock, Unlock, PlusCircle, Trash2, Crown, Users, Trophy, Gamepad2, History, Pencil, LayoutGrid, Info, PlayCircle, Archive, ArchiveRestore, RefreshCw, LogOut, Newspaper, Medal, AlertTriangle, BarChart2, Bomb, PiggyBank, Sparkles, BrainCircuit, ListOrdered } from 'lucide-react';
 
 // --- Types TypeScript ---
 interface Player {
@@ -106,7 +106,7 @@ const formatNumber = (num: number | undefined | null) => {
 const achievementsList: Achievement[] = [
     { id: 'veteran', name: 'Le Vétéran', description: 'Participer à 10 parties (toutes saisons confondues).', emoji: '🎖️', type: 'permanent', newsPhrase: (p) => `🎖️ ${p} est devenu un Vétéran des tables de poker en participant à 10 parties !` },
     { id: 'conqueror', name: 'Le Conquérant', description: 'Être le joueur avec le plus de victoires (1ère place) durant la saison en cours.', emoji: '👑', type: 'saisonnier', newsPhrase: (p) => `👑 ${p} s'empare du titre de Conquérant de la saison !`, lossPhrase: (p, n) => `👑 ${p} a perdu son titre de Conquérant au profit de ${n} !` },
-    { id: 'red_lantern', name: 'La Lanterne Rouge', description: 'Être le joueur avec le plus de dernières places durant la saison en cours.', emoji: '😥', type: 'saisonnier', newsPhrase: (p) => `😥 ${p} est la nouvelle Lanterne Rouge de la saison...`, lossPhrase: (p, n) => `😥 ${p} a passé le flambeau de la Lanterne Rouge à ${n} !` },
+    { id: 'red_lantern', name: 'La Lanterne Rouge', description: 'Être le joueur avec le plus de dernières places durant la saison en cours.', emoji: '�', type: 'saisonnier', newsPhrase: (p) => `😥 ${p} est la nouvelle Lanterne Rouge de la saison...`, lossPhrase: (p, n) => `😥 ${p} a passé le flambeau de la Lanterne Rouge à ${n} !` },
     { id: 'pillar', name: 'Le Pilier', description: 'Participer à 25 parties (toutes saisons).', emoji: '🏛️', type: 'permanent', newsPhrase: (p) => `🏛️ Avec 25 parties à son actif, ${p} est officiellement un Pilier de la ligue !` },
     { id: 'legend', name: 'La Légende', description: 'Participer à 50 parties (toutes saisons).', emoji: '🗿', type: 'permanent', newsPhrase: (p) => `🗿 Une légende vivante ! ${p} vient de terminer sa 50ème partie !` },
     { id: 'poulidor', name: 'Le Poulidor', description: 'Terminer 10 fois à la deuxième place.', emoji: '🥈', type: 'permanent', newsPhrase: (p) => `🥈 ${p} rejoint le club très fermé des Poulidor avec 10 deuxièmes places !` },
@@ -144,7 +144,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "4.0.1";
+const APP_VERSION = "5.0.1";
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -467,7 +467,23 @@ const PastSeasons: FC<{seasons: Season[], isAdmin: boolean, onDeleteSeason: (sea
         </div>
     )
 }
-const PlayerProfile: FC<{ player: Player, allGames: Game[], playerAchievements: PlayerAchievement[] }> = ({ player, allGames, playerAchievements }) => {
+const PlayerProfile: FC<{ player: Player, allGames: Game[], playerAchievements: PlayerAchievement[], onCoachRequest: () => Promise<string>, showAlert: (message: string, type?: 'info' | 'error' | 'success') => void }> = ({ player, allGames, playerAchievements, onCoachRequest, showAlert }) => {
+    const [coachAdvice, setCoachAdvice] = useState<string>('');
+    const [isCoachLoading, setIsCoachLoading] = useState(false);
+    
+    const handleGetAdvice = async () => {
+        setIsCoachLoading(true);
+        setCoachAdvice('');
+        try {
+            const advice = await onCoachRequest();
+            setCoachAdvice(advice);
+        } catch(e) {
+            console.error(e);
+            showAlert("Le coach est en pause café, réessayez plus tard.", "error");
+        }
+        setIsCoachLoading(false);
+    };
+
     const globalStats = useMemo(() => {
         const totalGamesPlayed = allGames.filter(g => g.players.some(p => p.playerId === player.id)).length;
         const totalWins = allGames.filter(g => g.players.some(p => p.playerId === player.id && p.rank === 1)).length;
@@ -492,7 +508,29 @@ const PlayerProfile: FC<{ player: Player, allGames: Game[], playerAchievements: 
     }
     return (
         <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-            <div className="flex flex-col sm:flex-row items-center gap-6 mb-8"><img src={player.imageUrl || `https://placehold.co/150x150/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-36 h-36 rounded-full border-4 border-indigo-500 object-cover"/><div className="text-center sm:text-left"><h2 className="text-3xl font-bold text-white">{player.name}</h2><p className="text-indigo-400">Statistiques globales</p></div></div>
+            <div className="flex flex-col lg:flex-row items-center lg:items-start gap-8 mb-8">
+                {/* Player Info */}
+                <div className="flex-shrink-0 flex flex-col items-center text-center">
+                    <img src={player.imageUrl || `https://placehold.co/150x150/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-36 h-36 rounded-full border-4 border-indigo-500 object-cover"/>
+                    <h2 className="text-3xl font-bold text-white mt-4">{player.name}</h2>
+                    <p className="text-indigo-400">Statistiques globales</p>
+                </div>
+
+                {/* Coach Analysis */}
+                <div className="flex-grow w-full bg-gray-700/50 p-6 rounded-lg">
+                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-3"><BrainCircuit size={24} className="text-indigo-400"/>L'avis de Coach Gemini</h3>
+                    <div className="bg-gray-900/70 p-4 rounded-md min-h-[120px] flex items-center justify-center">
+                        {isCoachLoading ? <div className="text-gray-400">Le coach analyse...</div> :
+                        coachAdvice ? <p className="text-gray-300 italic">"{coachAdvice}"</p> : <p className="text-gray-500">Cliquez sur le bouton pour obtenir une analyse.</p>
+                        }
+                    </div>
+                    <button onClick={handleGetAdvice} disabled={isCoachLoading} className="mt-4 w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-md flex items-center justify-center gap-2 disabled:bg-gray-500 disabled:cursor-not-allowed">
+                        <Sparkles size={16} />{isCoachLoading ? 'Analyse en cours...' : "Demander l'avis du Coach"}
+                    </button>
+                    <p className="text-xs text-gray-600 text-center mt-2">Commentaires générés par une IA. Peuvent être imprécis.</p>
+                </div>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <StatCard icon={Gamepad2} emoji="🎮" value={globalStats.totalGamesPlayed} label="Parties Jouées" colorClass="bg-blue-500" />
                 <StatCard icon={Trophy} emoji="🏆" value={globalStats.totalWins} label="Victoires" colorClass="bg-yellow-500" />
@@ -500,15 +538,45 @@ const PlayerProfile: FC<{ player: Player, allGames: Game[], playerAchievements: 
                 <StatCard icon={Bomb} emoji="😥" value={globalStats.lastPlaceCount} label="Dernières Places" colorClass="bg-red-500" />
                 <StatCard icon={PiggyBank} emoji="💰" value={formatNumber(player.totalChipsAmassed)} label="Jetons Amassés (Total)" colorClass="bg-pink-500" />
             </div>
+
             <div className="mt-8"><h3 className="text-xl font-bold text-white mb-4">Hauts Faits Débloqués</h3>{unlockedAchievements.length > 0 ? <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{unlockedAchievements.map(ach => <div key={ach.id} className="bg-gray-700 p-4 rounded-lg flex items-center gap-4"><span className="text-4xl">{ach.emoji}</span><div><p className="font-bold text-white">{ach.name}</p><p className="text-sm text-gray-400">{ach.description}</p></div></div>)}</div> : <p className="text-gray-400">Aucun haut fait débloqué pour le moment.</p>}</div>
         </div>
     );
 }
-const NewsFeed: FC<{ news: NewsItem[] }> = ({ news }) => {
+const CommentaryFeed: FC<{ feed: NewsItem[] }> = ({ feed }) => {
     return (
         <div className="space-y-4">
-            <div className="bg-gray-800 p-4 rounded-lg shadow-lg flex items-center text-indigo-400"><Newspaper size={24} className="mr-3" /><h2 className="text-xl sm:text-2xl font-bold">Fil d'actualités</h2></div>
-            {news.length > 0 ? news.map(item => <div key={item.id} className="bg-gray-800 p-4 rounded-lg shadow-md"><p className="text-white">{item.text}</p><p className="text-xs text-gray-500 mt-2 text-right">{formatDate(item.createdAt)}</p></div>) : <p className="text-gray-400 text-center py-8">Aucune actualité pour le moment.</p>}
+            <div className="bg-gray-800 p-4 rounded-lg shadow-lg flex items-center text-indigo-400">
+                <Newspaper size={24} className="mr-3" />
+                <h2 className="text-xl sm:text-2xl font-bold">Fil du commentateur</h2>
+            </div>
+            {feed.length > 0 ? feed.map(item => (
+                <div key={item.id} className="bg-gray-800 p-4 rounded-lg shadow-md">
+                    <p className="text-white italic">"{item.text}"</p>
+                    <p className="text-xs text-gray-500 mt-2 text-right">{formatDate(item.createdAt)}</p>
+                </div>
+            )) : (
+                <p className="text-gray-400 text-center py-8">Aucune actualité pour le moment. Jouez une partie pour voir la magie opérer !</p>
+            )}
+             <p className="text-xs text-gray-600 text-center mt-4">Les commentaires sont générés par une IA et peuvent être imprécis.</p>
+        </div>
+    );
+}
+const EventLog: FC<{ events: NewsItem[] }> = ({ events }) => {
+    return (
+        <div className="space-y-4">
+            <div className="bg-gray-800 p-4 rounded-lg shadow-lg flex items-center text-indigo-400">
+                <ListOrdered size={24} className="mr-3" />
+                <h2 className="text-xl sm:text-2xl font-bold">Journal des Événements</h2>
+            </div>
+            {events.length > 0 ? events.map(item => (
+                <div key={item.id} className="bg-gray-800 p-4 rounded-lg shadow-md">
+                    <p className="text-gray-300">{item.text}</p>
+                    <p className="text-xs text-gray-500 mt-2 text-right">{formatDate(item.createdAt)}</p>
+                </div>
+            )) : (
+                <p className="text-gray-400 text-center py-8">Aucun événement enregistré.</p>
+            )}
         </div>
     );
 }
@@ -527,7 +595,8 @@ export default function App() {
     const [players, setPlayers] = useState<Player[]>([]);
     const [games, setGames] = useState<Game[]>([]);
     const [seasons, setSeasons] = useState<Season[]>([]);
-    const [newsFeed, setNewsFeed] = useState<NewsItem[]>([]);
+    const [commentaryFeed, setCommentaryFeed] = useState<NewsItem[]>([]);
+    const [eventLog, setEventLog] = useState<NewsItem[]>([]);
     const [playerAchievements, setPlayerAchievements] = useState<PlayerAchievement[]>([]);
     const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
@@ -565,16 +634,18 @@ export default function App() {
         const playersPath = `artifacts/${appId}/public/data/players`;
         const gamesPath = `artifacts/${appId}/public/data/games`;
         const seasonsPath = `artifacts/${appId}/public/data/seasons`;
-        const newsPath = `artifacts/${appId}/public/data/news_feed`;
+        const commentaryPath = `artifacts/${appId}/public/data/commentary_feed`;
+        const eventLogPath = `artifacts/${appId}/public/data/event_log`;
         const achievementsPath = `artifacts/${appId}/public/data/player_achievements`;
 
         const unsubPlayers = onSnapshot(query(collection(db, playersPath)), (snap) => { setPlayers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player))); setLoading(false); }, (err) => { console.error("Player read error: ", err); setLoading(false); });
         const unsubGames = onSnapshot(query(collection(db, gamesPath)), (snap) => { setGames(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Game))); }, (err) => { console.error("Games read error: ", err);});
         const unsubSeasons = onSnapshot(query(collection(db, seasonsPath)), (snap) => { setSeasons(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Season))); }, (err) => { console.error("Seasons read error: ", err);});
-        const unsubNews = onSnapshot(query(collection(db, newsPath), orderBy('createdAt', 'desc'), limit(20)), (snap) => { setNewsFeed(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as NewsItem))); }, (err) => { console.error("News read error: ", err);});
+        const unsubCommentary = onSnapshot(query(collection(db, commentaryPath), orderBy('createdAt', 'desc'), limit(20)), (snap) => { setCommentaryFeed(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as NewsItem))); }, (err) => { console.error("Commentary read error: ", err);});
+        const unsubEventLog = onSnapshot(query(collection(db, eventLogPath), orderBy('createdAt', 'desc'), limit(50)), (snap) => { setEventLog(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as NewsItem))); }, (err) => { console.error("Event Log read error: ", err);});
         const unsubPlayerAchievements = onSnapshot(query(collection(db, achievementsPath)), (snap) => { setPlayerAchievements(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as PlayerAchievement))); }, (err) => { console.error("Player Achievements read error: ", err);});
         
-        return () => { unsubPlayers(); unsubGames(); unsubSeasons(); unsubNews(); unsubPlayerAchievements(); };
+        return () => { unsubPlayers(); unsubGames(); unsubSeasons(); unsubCommentary(); unsubEventLog(); unsubPlayerAchievements(); };
     }, [isAuthReady]);
 
     const activeSeason = useMemo(() => seasons.find(s => s.isActive) || null, [seasons]);
@@ -613,9 +684,36 @@ export default function App() {
     };
     const handleAdminLogout = () => { setIsAdmin(false); showAlert("Mode administrateur désactivé"); };
     
+    const generateAiCommentary = async (prompt: string): Promise<string> => {
+        const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+        const payload = { contents: chatHistory };
+        const apiKey = "";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const result = await response.json();
+        if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
+            return result.candidates[0].content.parts[0].text.replace(/"/g, '');
+        }
+        return "Le commentateur semble sans voix...";
+    };
+
+    const handleCoachRequest = async (): Promise<string> => {
+        if (!selectedPlayer) return "Joueur non trouvé.";
+        const stats = {
+            name: selectedPlayer.name,
+            games: games.filter(g => g.players.some(p => p.playerId === selectedPlayer.id)).length,
+            wins: games.filter(g => g.players.some(p => p.playerId === selectedPlayer.id && p.rank === 1)).length,
+            lastPlaces: games.filter(g => g.players.some(p => p.playerId === selectedPlayer.id && p.rank === g.players.length)).length,
+            totalChips: selectedPlayer.totalChipsAmassed || 0,
+        };
+        const prompt = `Agis comme "Coach Gemini", un coach de poker un peu taquin mais bienveillant. Analyse les statistiques suivantes pour le joueur "${stats.name}" et donne-lui un conseil court, drôle et personnalisé en une ou deux phrases. Statistiques: ${stats.games} parties jouées, ${stats.wins} victoires, ${stats.lastPlaces} dernières places, ${formatNumber(stats.totalChips)} jetons amassés.`;
+        return generateAiCommentary(prompt);
+    };
+
     const checkAchievements = async (newGame: Game, updatedPlayers: Player[], allGames: Game[], currentActiveSeason: Season | null, batch: any) => {
         if (!currentActiveSeason) return;
-        const newsCollection = collection(db, `artifacts/${appId}/public/data/news_feed`);
+        const newsCollection = collection(db, `artifacts/${appId}/public/data/commentary_feed`);
+        const eventLogCollection = collection(db, `artifacts/${appId}/public/data/event_log`);
         const playerAchievementsCollection = collection(db, `artifacts/${appId}/public/data/player_achievements`);
 
         for (const p of newGame.players) {
@@ -623,44 +721,42 @@ export default function App() {
             if (!player) continue;
             const hasAchievement = (id: string) => playerAchievements.some(pa => pa.playerId === player.id && pa.achievementId === id);
 
-            if (!hasAchievement('serial_killer') && newGame.players.length >= 5 && p.rank === 1 && newGame.players.filter(gp => gp.chipCount > 0).length === 1) {
-                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'serial_killer', unlockedAt: Timestamp.now() });
-                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'serial_killer')!.newsPhrase(player.name), createdAt: Timestamp.now() });
-            }
-            if (!hasAchievement('magnate') && p.chipCount > 130000) {
-                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'magnate', unlockedAt: Timestamp.now() });
-                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'magnate')!.newsPhrase(player.name, {chipCount: p.chipCount}), createdAt: Timestamp.now() });
-            } else if (!hasAchievement('evening_millionaire') && p.chipCount > 80000) {
-                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'evening_millionaire', unlockedAt: Timestamp.now() });
-                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'evening_millionaire')!.newsPhrase(player.name, {chipCount: p.chipCount}), createdAt: Timestamp.now() });
-            }
-            if (!hasAchievement('survivor') && newGame.players.length >= 6 && p.chipCount > 0 && p.chipCount <= 3000 && p.rank === newGame.players.filter(gp => gp.chipCount > 0).length) {
-                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'survivor', unlockedAt: Timestamp.now() });
-                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'survivor')!.newsPhrase(player.name), createdAt: Timestamp.now() });
-            }
-            if (!hasAchievement('precise') && p.chipCount > 0 && p.chipCount % 10000 === 0) {
-                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'precise', unlockedAt: Timestamp.now() });
-                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'precise')!.newsPhrase(player.name), createdAt: Timestamp.now() });
-            }
-            const chipString = p.chipCount.toString();
-            const hasTriple = /(\d)\1\1/.test(chipString);
-            if (!hasAchievement('collector') && p.chipCount > 0 && hasTriple) {
-                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'collector', unlockedAt: Timestamp.now() });
-                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'collector')!.newsPhrase(player.name), createdAt: Timestamp.now() });
-            }
+            const checkAndAddAchievement = async (id: string, condition: boolean, details?: any) => {
+                if (!hasAchievement(id) && condition) {
+                    const achievement = achievementsList.find(a => a.id === id);
+                    if (!achievement) return;
+                    
+                    const eventText = achievement.newsPhrase(player.name, details);
+                    batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: id, unlockedAt: Timestamp.now() });
+                    batch.set(doc(eventLogCollection), { text: eventText, createdAt: Timestamp.now() });
 
+                    const commentaryPrompt = `Agis comme un commentateur sportif de poker. Rédige une brève actualité (2 phrases max) sur cet événement : '${eventText}'. Sois créatif et enthousiaste.`;
+                    const commentary = await generateAiCommentary(commentaryPrompt);
+                    batch.set(doc(newsCollection), { text: commentary, createdAt: Timestamp.now() });
+                }
+            };
+            
             const allPlayerGames = [...allGames, newGame].filter(g => g.players.some(gp => gp.playerId === player.id));
-            if (!hasAchievement('veteran') && allPlayerGames.length >= 10) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'veteran', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'veteran')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
-            if (!hasAchievement('pillar') && allPlayerGames.length >= 25) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'pillar', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'pillar')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
-            if (!hasAchievement('legend') && allPlayerGames.length >= 50) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'legend', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'legend')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
-            if (!hasAchievement('poulidor') && (player.secondPlaceCount || 0) >= 10) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'poulidor', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'poulidor')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
-            if (!hasAchievement('holed_pocket') && (player.zeroChipCount || 0) >= 10) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'holed_pocket', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'holed_pocket')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
-            if (!hasAchievement('first_blood') && (player.firstBloodCount || 0) >= 5) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'first_blood', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'first_blood')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
-            if (!hasAchievement('invincible') && (player.invincibleStreak || 0) >= 8) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'invincible', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'invincible')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
-            if (!hasAchievement('soft_belly') && (player.ventreMouCount || 0) >= 5) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'soft_belly', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'soft_belly')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
-            if (!hasAchievement('the_bubble') && (player.secondPlaceCount || 0) >= 8) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'the_bubble', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'the_bubble')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
-            if (!hasAchievement('millionaire') && (player.totalChipsAmassed || 0) >= 1000000) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'millionaire', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'millionaire')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
-            else if (!hasAchievement('golden_boy') && (player.totalChipsAmassed || 0) >= 500000) { batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'golden_boy', unlockedAt: Timestamp.now() }); batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'golden_boy')!.newsPhrase(player.name), createdAt: Timestamp.now() }); }
+            
+            await checkAndAddAchievement('serial_killer', newGame.players.length >= 5 && p.rank === 1 && newGame.players.filter(gp => gp.chipCount > 0).length === 1);
+            await checkAndAddAchievement('magnate', p.chipCount > 130000, { chipCount: p.chipCount });
+            await checkAndAddAchievement('evening_millionaire', p.chipCount > 80000 && p.chipCount <= 130000, { chipCount: p.chipCount });
+            await checkAndAddAchievement('survivor', newGame.players.length >= 6 && p.chipCount > 0 && p.chipCount <= 3000 && p.rank === newGame.players.filter(gp => gp.chipCount > 0).length);
+            await checkAndAddAchievement('precise', p.chipCount > 0 && p.chipCount % 10000 === 0);
+            const hasTriple = /(\d)\1\1/.test(p.chipCount.toString());
+            await checkAndAddAchievement('collector', p.chipCount > 0 && hasTriple);
+            
+            await checkAndAddAchievement('veteran', allPlayerGames.length >= 10);
+            await checkAndAddAchievement('pillar', allPlayerGames.length >= 25);
+            await checkAndAddAchievement('legend', allPlayerGames.length >= 50);
+            await checkAndAddAchievement('poulidor', (player.secondPlaceCount || 0) >= 10);
+            await checkAndAddAchievement('holed_pocket', (player.zeroChipCount || 0) >= 10);
+            await checkAndAddAchievement('first_blood', (player.firstBloodCount || 0) >= 5);
+            await checkAndAddAchievement('invincible', (player.invincibleStreak || 0) >= 8);
+            await checkAndAddAchievement('soft_belly', (player.ventreMouCount || 0) >= 5);
+            await checkAndAddAchievement('the_bubble', (player.secondPlaceCount || 0) >= 8);
+            await checkAndAddAchievement('millionaire', (player.totalChipsAmassed || 0) >= 1000000);
+            await checkAndAddAchievement('golden_boy', (player.totalChipsAmassed || 0) >= 500000 && (player.totalChipsAmassed || 0) < 1000000);
         }
 
         const seasonGames = [...allGames, newGame].filter(g => g.seasonId === currentActiveSeason.id);
@@ -684,7 +780,7 @@ export default function App() {
             const leadersChanged = newLeaders.length !== oldLeaders.length || !newLeaders.every(id => oldLeaders.includes(id));
 
             if (leadersChanged) {
-                oldLeaders.forEach(oldLeaderId => {
+                for (const oldLeaderId of oldLeaders) {
                     if (!newLeaders.includes(oldLeaderId)) {
                         const achievementDoc = playerAchievements.find(pa => pa.playerId === oldLeaderId && pa.achievementId === achievement.id);
                         if (achievementDoc) {
@@ -692,18 +788,18 @@ export default function App() {
                             if (achievement.lossPhrase && newLeaders.length > 0) {
                                 const oldLeaderName = updatedPlayers.find(p => p.id === oldLeaderId)?.name || 'Un ancien';
                                 const newLeaderName = updatedPlayers.find(p => p.id === newLeaders[0])?.name || 'Un nouveau';
-                                batch.set(doc(newsCollection), { text: achievement.lossPhrase(oldLeaderName, newLeaderName), createdAt: Timestamp.now() });
+                                batch.set(doc(eventLogCollection), { text: achievement.lossPhrase(oldLeaderName, newLeaderName), createdAt: Timestamp.now() });
                             }
                         }
                     }
-                });
-                newLeaders.forEach(newLeaderId => {
+                }
+                for (const newLeaderId of newLeaders) {
                     if (!oldLeaders.includes(newLeaderId)) {
                         const leaderName = updatedPlayers.find(p => p.id === newLeaderId)?.name || 'Un joueur';
                         batch.set(doc(playerAchievementsCollection), { playerId: newLeaderId, achievementId: achievement.id, unlockedAt: Timestamp.now() });
-                        batch.set(doc(newsCollection), { text: achievement.newsPhrase(leaderName), createdAt: Timestamp.now() });
+                        batch.set(doc(eventLogCollection), { text: achievement.newsPhrase(leaderName), createdAt: Timestamp.now() });
                     }
-                });
+                }
             }
         }
     };
@@ -814,7 +910,7 @@ export default function App() {
 
                     if (!hasAchievement('champion')) {
                         batch.set(doc(collection(db, `artifacts/${appId}/public/data/player_achievements`)), { playerId: winner.id, achievementId: 'champion', unlockedAt: Timestamp.now() });
-                        batch.set(doc(collection(db, `artifacts/${appId}/public/data/news_feed`)), { text: achievementsList.find(a => a.id === 'champion')!.newsPhrase(winner.name, {seasonName: activeSeason.name}), createdAt: Timestamp.now() });
+                        batch.set(doc(collection(db, `artifacts/${appId}/public/data/event_log`)), { text: achievementsList.find(a => a.id === 'champion')!.newsPhrase(winner.name, {seasonName: activeSeason.name}), createdAt: Timestamp.now() });
                     }
 
                     const dynastyAchievements = {'poker_god': 5, 'emperor': 4, 'dynasty': 3, 'double_champion': 2, 'back_to_back': 2 };
@@ -825,7 +921,7 @@ export default function App() {
                             const winCount = isConsecutiveCheck ? newConsecutiveWins : newSeasonWins;
                             if(winCount >= count) {
                                 batch.set(doc(collection(db, `artifacts/${appId}/public/data/player_achievements`)), { playerId: winner.id, achievementId: id, unlockedAt: Timestamp.now() });
-                                batch.set(doc(collection(db, `artifacts/${appId}/public/data/news_feed`)), { text: achievementsList.find(a => a.id === id)!.newsPhrase(winner.name, {seasonName: activeSeason.name}), createdAt: Timestamp.now() });
+                                batch.set(doc(collection(db, `artifacts/${appId}/public/data/event_log`)), { text: achievementsList.find(a => a.id === id)!.newsPhrase(winner.name, {seasonName: activeSeason.name}), createdAt: Timestamp.now() });
                             }
                         }
                     }
@@ -840,7 +936,7 @@ export default function App() {
         players.forEach(player => {
             const playerRef = doc(db, `artifacts/${appId}/public/data/players`, player.id);
             batch.update(playerRef, { totalScore: 0, consecutiveGamesStreak: 0 });
-            if(player.id !== activeSeason?.finalLeaderboard?.[0]?.id) {
+            if(activeSeason && player.id !== activeSeason.finalLeaderboard?.[0]?.id) {
                 batch.update(playerRef, { consecutiveSeasonWins: 0 });
             }
         });
@@ -876,7 +972,7 @@ export default function App() {
         showAlert("Réinitialisation en cours...", "info");
         try {
             const batch = writeBatch(db);
-            const collectionsToWipe = ['games', 'seasons', 'news_feed', 'player_achievements'];
+            const collectionsToWipe = ['games', 'seasons', 'commentary_feed', 'event_log', 'player_achievements'];
             for (const collectionName of collectionsToWipe) {
                 const collectionRef = collection(db, `artifacts/${appId}/public/data/${collectionName}`);
                 const snapshot = await getDocs(query(collectionRef));
@@ -906,16 +1002,17 @@ export default function App() {
     const renderView = () => {
         if (loading || !isAuthReady) return <div className="text-center text-white py-10">Chargement des données...</div>
         switch (view) {
-            case 'news': return <NewsFeed news={newsFeed} />;
+            case 'news': return <CommentaryFeed feed={commentaryFeed} />;
+            case 'events': return <EventLog events={eventLog} />;
             case 'home': return <Leaderboard players={playersWithStats} onViewProfile={handleViewProfile}/>;
             case 'players': return <PlayerManagement players={playersWithStats} isAdmin={isAdmin} onViewProfile={handleViewProfile}/>;
             case 'new_game': return isAdmin ? <NewGame players={players} onGameEnd={handleGameEnd} activeSeason={activeSeason} showAlert={showAlert}/> : <div className='text-center text-gray-400 p-8 bg-gray-800 rounded-lg'>Vous devez être administrateur pour créer une partie.</div>;
             case 'history': return <GameHistory games={gamesOfActiveSeason} players={players} onEditGame={(game: Game) => setEditingGame(game)} isAdmin={isAdmin} />;
             case 'seasons': return <SeasonManagement seasons={seasons} playersWithStats={playersWithStats} onActivateSeason={handleActivateSeason} onEditSeason={setEditingSeason} showAlert={showAlert} onGeneralReset={() => setShowResetConfirm(true)} />;
             case 'past_seasons': return <PastSeasons seasons={seasons} isAdmin={isAdmin} onDeleteSeason={handleDeleteSeason} />;
-            case 'player_profile': return selectedPlayer ? <PlayerProfile player={selectedPlayer} allGames={games} playerAchievements={playerAchievements} /> : <div className="text-center text-red-500">Erreur: Joueur non trouvé</div>;
+            case 'player_profile': return selectedPlayer ? <PlayerProfile player={selectedPlayer} allGames={games} playerAchievements={playerAchievements} onCoachRequest={() => handleCoachRequest()} showAlert={showAlert} /> : <div className="text-center text-red-500">Erreur: Joueur non trouvé</div>;
             case 'achievements_list': return <AchievementsList />;
-            default: return <NewsFeed news={newsFeed} />;
+            default: return <CommentaryFeed feed={commentaryFeed} />;
         }
     };
     
@@ -959,7 +1056,8 @@ export default function App() {
                 </header>
 
                 <nav className="flex flex-wrap gap-2 mb-6 sm:mb-8">
-                    <NavButton targetView="news" icon={Newspaper} label="Actualités" />
+                    <NavButton targetView="news" icon={Newspaper} label="Commentaires" />
+                    <NavButton targetView="events" icon={ListOrdered} label="Événements" />
                     <NavButton targetView="home" icon={Trophy} label="Classement" />
                     <NavButton targetView="players" icon={Users} label="Joueurs" />
                     {isAdmin && <NavButton targetView="new_game" icon={Gamepad2} label="Nouvelle Partie" />}
