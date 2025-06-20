@@ -102,7 +102,7 @@ const achievementsList: Achievement[] = [
         id: 'conqueror',
         name: 'Le Conquérant',
         description: 'Être le joueur avec le plus de victoires (1ère place) durant la saison en cours.',
-        emoji: '�',
+        emoji: '👑',
         type: 'saisonnier',
         newsPhrase: (playerName) => `👑 ${playerName} s'empare du titre de Conquérant de la saison avec le plus de victoires !`,
         lossPhrase: (playerName, newHolderName) => `👑 ${playerName} a perdu son titre de Conquérant au profit de ${newHolderName} !`
@@ -111,7 +111,7 @@ const achievementsList: Achievement[] = [
         id: 'red_lantern',
         name: 'La Lanterne Rouge',
         description: 'Être le joueur avec le plus de dernières places durant la saison en cours.',
-        emoji: '😥',
+        emoji: '�',
         type: 'saisonnier',
         newsPhrase: (playerName) => `😥 ${playerName} est la nouvelle Lanterne Rouge de la saison...`,
         lossPhrase: (playerName, newHolderName) => `😥 ${playerName} a passé le flambeau de la Lanterne Rouge à ${newHolderName} !`
@@ -130,7 +130,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "2.4.3"; // Version bump
+const APP_VERSION = "2.4.4"; // Version bump
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
