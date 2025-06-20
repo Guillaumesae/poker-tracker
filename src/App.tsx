@@ -117,7 +117,6 @@ const achievementsList: Achievement[] = [
     { id: 'the_bubble', name: 'La Bulle', description: "Être le dernier joueur éliminé avant le vainqueur (finir 2ème) 8 fois.", emoji: '🫧', type: 'permanent', newsPhrase: (p) => `🫧 Si près du but... ${p} est passé maître dans l'art de faire la bulle avec une 8ème deuxième place !` },
 ];
 
-// --- Firebase Config ---
 const firebaseConfig = {
   apiKey: "AIzaSyCEUi2n6f44JwoC64hZ0OqdWfsw-_C-qkU",
   authDomain: "poker-score-8eef5.firebaseapp.com",
@@ -127,7 +126,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "3.0.1";
+const APP_VERSION = "3.0.2";
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -136,7 +135,6 @@ setLogLevel('debug');
 
 const appId = 'default-poker-app'; 
 
-// --- Utility Functions ---
 const formatDate = (timestamp: Timestamp | undefined, format: 'long' | 'short' = 'long') => {
     if (!timestamp) return '';
     const date = new Date(timestamp.seconds * 1000);
@@ -148,7 +146,7 @@ const formatDate = (timestamp: Timestamp | undefined, format: 'long' | 'short' =
     });
 }
 
-// --- UI Components (unchanged) ---
+// --- UI Components ---
 const ConfirmationModal: FC<{ show: boolean; onClose: () => void; onConfirm: () => void; title: string; children: React.ReactNode; confirmText?: string; confirmColor?: "red" | "blue" }> = ({ show, onClose, onConfirm, title, children, confirmText = "Confirmer", confirmColor = "red" }) => {
     if (!show) return null;
     const colorClasses = { red: "bg-red-600 hover:bg-red-500", blue: "bg-blue-600 hover:bg-blue-500" };
@@ -351,7 +349,7 @@ const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) 
             return { playerId, name: player?.name || 'Inconnu', chipCount: 0, rank: totalPlayers - index, score: (totalPlayers - (totalPlayers - index)) * 10 };
         });
         const survivors = gameParticipants.filter(p => !eliminationOrder.includes(p.id)).map(p => ({ playerId: p.id, name: p.name, chipCount: parseInt(chipCounts[p.id] || "0", 10) })).sort((a, b) => b.chipCount - a.chipCount);
-        const survivorRankings = survivors.map((survivor, index) => ({ ...survivor, rank: index + 1, score: (totalPlayers - rank) * 10 }));
+        const survivorRankings = survivors.map((survivor, index) => ({ ...survivor, rank: index + 1, score: (totalPlayers - (index + 1)) * 10 }));
         const allRankedPlayers = [...survivorRankings, ...eliminatedPlayers].sort((a,b) => a.rank - b.rank);
         if(allRankedPlayers.length !== totalPlayers){ showAlert("Erreur dans le classement, veuillez vérifier les données.", "error"); return; }
         await onGameEnd(allRankedPlayers);
@@ -546,11 +544,11 @@ export default function App() {
         const newsPath = `artifacts/${appId}/public/data/news_feed`;
         const achievementsPath = `artifacts/${appId}/public/data/player_achievements`;
 
-        const unsubPlayers = onSnapshot(query(collection(db, playersPath)), (snap) => { setPlayers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player))); setLoading(false); }, (err) => { console.error("Player read error: ", err); showAlert("Erreur de lecture (joueurs)", "error"); });
-        const unsubGames = onSnapshot(query(collection(db, gamesPath)), (snap) => { setGames(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Game))); }, (err) => { console.error("Games read error: ", err); showAlert("Erreur de lecture (parties)", "error");});
-        const unsubSeasons = onSnapshot(query(collection(db, seasonsPath)), (snap) => { setSeasons(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Season))); }, (err) => { console.error("Seasons read error: ", err); showAlert("Erreur de lecture (saisons)", "error");});
-        const unsubNews = onSnapshot(query(collection(db, newsPath), orderBy('createdAt', 'desc'), limit(20)), (snap) => { setNewsFeed(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as NewsItem))); }, (err) => { console.error("News read error: ", err); showAlert("Erreur de lecture (actus)", "error");});
-        const unsubPlayerAchievements = onSnapshot(query(collection(db, achievementsPath)), (snap) => { setPlayerAchievements(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as PlayerAchievement))); }, (err) => { console.error("Player Achievements read error: ", err); showAlert("Erreur de lecture (hauts faits)", "error");});
+        const unsubPlayers = onSnapshot(query(collection(db, playersPath)), (snap) => { setPlayers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player))); setLoading(false); }, (err) => { console.error("Player read error: ", err); setLoading(false); });
+        const unsubGames = onSnapshot(query(collection(db, gamesPath)), (snap) => { setGames(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Game))); }, (err) => { console.error("Games read error: ", err);});
+        const unsubSeasons = onSnapshot(query(collection(db, seasonsPath)), (snap) => { setSeasons(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Season))); }, (err) => { console.error("Seasons read error: ", err);});
+        const unsubNews = onSnapshot(query(collection(db, newsPath), orderBy('createdAt', 'desc'), limit(20)), (snap) => { setNewsFeed(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as NewsItem))); }, (err) => { console.error("News read error: ", err);});
+        const unsubPlayerAchievements = onSnapshot(query(collection(db, achievementsPath)), (snap) => { setPlayerAchievements(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as PlayerAchievement))); }, (err) => { console.error("Player Achievements read error: ", err);});
         
         return () => { unsubPlayers(); unsubGames(); unsubSeasons(); unsubNews(); unsubPlayerAchievements(); };
     }, [isAuthReady]);
@@ -591,20 +589,18 @@ export default function App() {
     };
     const handleAdminLogout = () => { setIsAdmin(false); showAlert("Mode administrateur désactivé"); };
     
-    // BUILD FIX: This function was implemented to fix the "is declared but its value is never read" error.
-    const checkAchievements = async (newGame: Game, updatedPlayers: Player[], allGames: Game[], currentActiveSeason: Season) => {
+    const checkAchievements = async (newGame: Game, updatedPlayers: Player[], allGames: Game[], currentActiveSeason: Season | null) => {
+        if (!currentActiveSeason) return;
         const batch = writeBatch(db);
         const newsCollection = collection(db, `artifacts/${appId}/public/data/news_feed`);
         const playerAchievementsCollection = collection(db, `artifacts/${appId}/public/data/player_achievements`);
 
-        // Check permanent achievements for each player in the last game
         for (const p of newGame.players) {
             const player = updatedPlayers.find(up => up.id === p.playerId);
             if (!player) continue;
 
             const hasAchievement = (id: string) => playerAchievements.some(pa => pa.playerId === player.id && pa.achievementId === id);
 
-            // One-off achievements
             if (!hasAchievement('serial_killer') && newGame.players.length >= 5 && p.rank === 1 && newGame.players.filter(gp => gp.chipCount > 0).length === 1) {
                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'serial_killer', unlockedAt: Timestamp.now() });
                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'serial_killer')!.newsPhrase(player.name), createdAt: Timestamp.now() });
@@ -621,7 +617,6 @@ export default function App() {
                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'survivor')!.newsPhrase(player.name), createdAt: Timestamp.now() });
             }
 
-            // Career total achievements
             const allPlayerGames = [...allGames, newGame].filter(g => g.players.some(gp => gp.playerId === player.id));
             if (!hasAchievement('veteran') && allPlayerGames.length >= 10) {
                  batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'veteran', unlockedAt: Timestamp.now() });
@@ -635,8 +630,6 @@ export default function App() {
                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'legend', unlockedAt: Timestamp.now() });
                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'legend')!.newsPhrase(player.name), createdAt: Timestamp.now() });
             }
-
-            // Career stat count achievements
             if (!hasAchievement('poulidor') && (player.secondPlaceCount || 0) >= 10) {
                  batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'poulidor', unlockedAt: Timestamp.now() });
                  batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'poulidor')!.newsPhrase(player.name), createdAt: Timestamp.now() });
@@ -661,8 +654,6 @@ export default function App() {
                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'the_bubble', unlockedAt: Timestamp.now() });
                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'the_bubble')!.newsPhrase(player.name), createdAt: Timestamp.now() });
             }
-
-            // Total chips amassed
             if (!hasAchievement('millionaire') && (player.totalChipsAmassed || 0) >= 1000000) {
                  batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'millionaire', unlockedAt: Timestamp.now() });
                  batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'millionaire')!.newsPhrase(player.name), createdAt: Timestamp.now() });
@@ -672,10 +663,8 @@ export default function App() {
             }
         }
 
-        // Check seasonal achievements
         const seasonGames = [...allGames, newGame].filter(g => g.seasonId === currentActiveSeason.id);
         const seasonalAchievements = achievementsList.filter(a => a.type === 'saisonnier');
-
         for (const achievement of seasonalAchievements) {
             const playerStats: { [playerId: string]: number } = {};
             updatedPlayers.forEach(p => playerStats[p.id] = 0);
@@ -690,7 +679,6 @@ export default function App() {
 
             const newLeaders = Object.keys(playerStats).filter(id => playerStats[id] === maxStat);
             const oldLeaders = playerAchievements.filter(pa => pa.achievementId === achievement.id).map(pa => pa.playerId);
-
             const leadersChanged = newLeaders.length !== oldLeaders.length || !newLeaders.every(id => oldLeaders.includes(id));
 
             if (leadersChanged) {
@@ -722,12 +710,10 @@ export default function App() {
 
     const handleGameEnd = async (scoredPlayers: GamePlayer[]) => {
         if (!activeSeason) { showAlert("Aucune saison active pour enregistrer la partie.", "error"); return; }
-        
         const batch = writeBatch(db);
         const newGameRef = doc(collection(db, `artifacts/${appId}/public/data/games`));
         const newGameData = { date: new Date(), players: scoredPlayers, seasonId: activeSeason.id };
         batch.set(newGameRef, newGameData);
-
         const updatedPlayersData: Player[] = JSON.parse(JSON.stringify(players));
 
         for (const sp of scoredPlayers) {
@@ -771,7 +757,9 @@ export default function App() {
         showAlert("La partie a été enregistrée !", "success");
         setView('news');
 
-        await checkAchievements({id: newGameRef.id, ...newGameData, date: Timestamp.fromDate(newGameData.date)}, updatedPlayersData, games, activeSeason);
+        if (activeSeason) {
+            await checkAchievements({id: newGameRef.id, ...newGameData, date: Timestamp.fromDate(newGameData.date)}, updatedPlayersData, games, activeSeason);
+        }
     };
 
     const handleGameUpdate = async (gameToUpdate: Game, newPlayers: GamePlayer[]) => {
