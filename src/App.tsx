@@ -102,7 +102,7 @@ const achievementsList: Achievement[] = [
         id: 'conqueror',
         name: 'Le Conquérant',
         description: 'Être le joueur avec le plus de victoires (1ère place) durant la saison en cours.',
-        emoji: '👑',
+        emoji: '�',
         type: 'saisonnier',
         newsPhrase: (playerName) => `👑 ${playerName} s'empare du titre de Conquérant de la saison avec le plus de victoires !`,
         lossPhrase: (playerName, newHolderName) => `👑 ${playerName} a perdu son titre de Conquérant au profit de ${newHolderName} !`
@@ -130,7 +130,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "2.4.2"; // Version bump
+const APP_VERSION = "2.4.3"; // Version bump
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -488,7 +488,7 @@ const PlayerManagement: FC<{ players: PlayerWithStats[]; isAdmin: boolean; onVie
     );
 }
 
-const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[], participants: Player[]) => Promise<void>; activeSeason: Season | null; showAlert: (message: string, type?: 'info' | 'error' | 'success') => void; }> = ({ players, onGameEnd, activeSeason, showAlert }) => {
+const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) => Promise<void>; activeSeason: Season | null; showAlert: (message: string, type?: 'info' | 'error' | 'success') => void; }> = ({ players, onGameEnd, activeSeason, showAlert }) => {
     const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
     const [chipCounts, setChipCounts] = useState<{ [key: string]: string }>({});
     const [eliminationOrder, setEliminationOrder] = useState<string[]>([]);
@@ -554,7 +554,7 @@ const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[], 
             return;
         }
 
-        await onGameEnd(allRankedPlayers, gameParticipants);
+        await onGameEnd(allRankedPlayers);
     };
     
     if (!activeSeason) {
@@ -1092,7 +1092,8 @@ export default function App() {
         await batch.commit();
     };
 
-    const handleGameEnd = async (scoredPlayers: GamePlayer[], participants: Player[]) => {
+    const handleGameEnd = async (scoredPlayers: GamePlayer[]) => {
+        // BUILD FIX: The 'participants' parameter was declared but not used. It has been removed.
         if (!activeSeason) { showAlert("Aucune saison active pour enregistrer la partie.", "error"); return; }
         const batch = writeBatch(db);
         const newGameRef = doc(collection(db, `artifacts/${appId}/public/data/games`));
@@ -1305,3 +1306,4 @@ export default function App() {
         </div>
     );
 }
+�
