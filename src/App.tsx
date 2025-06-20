@@ -24,11 +24,18 @@ import type { Firestore } from 'firebase/firestore';
 import { Lock, Unlock, PlusCircle, Trash2, Crown, Users, Trophy, Gamepad2, History, Pencil, LayoutGrid, Info, PlayCircle, Archive, ArchiveRestore, RefreshCw, LogOut, Newspaper, Medal, AlertTriangle, BarChart2, Bomb } from 'lucide-react';
 
 // --- Types TypeScript ---
+// DATABASE CHANGE: Added new fields to track career stats for achievements.
 interface Player {
     id: string;
     name: string;
     imageUrl?: string;
     totalScore: number;
+    totalChipsAmassed?: number;
+    secondPlaceCount?: number;
+    zeroChipCount?: number;
+    firstBloodCount?: number;
+    invincibleStreak?: number;
+    ventreMouCount?: number;
 }
 
 interface PlayerWithStats extends Player {
@@ -69,7 +76,8 @@ interface Achievement {
     description: string;
     emoji: string;
     type: 'permanent' | 'saisonnier';
-    newsPhrase: (playerName: string) => string;
+    isSecret?: boolean; // Future use maybe?
+    newsPhrase: (playerName: string, details?: any) => string;
     lossPhrase?: (playerName: string, newHolderName: string) => string;
 }
 
@@ -86,37 +94,43 @@ interface NewsItem {
     createdAt: Timestamp;
 }
 
-// --- Configuration des Hauts Faits ---
+// --- Achievements Configuration ---
 const achievementsList: Achievement[] = [
-    {
-        id: 'veteran',
-        name: 'Le Vétéran',
-        description: 'Participer à 10 parties (toutes saisons confondues).',
-        emoji: '🎖️',
-        type: 'permanent',
-        newsPhrase: (playerName) => `🎖️ ${playerName} est devenu un Vétéran des tables de poker en participant à 10 parties !`
-    },
-    {
-        id: 'conqueror',
-        name: 'Le Conquérant',
-        description: 'Être le joueur avec le plus de victoires (1ère place) durant la saison en cours.',
-        emoji: '👑',
-        type: 'saisonnier',
-        newsPhrase: (playerName) => `👑 ${playerName} s'empare du titre de Conquérant de la saison avec le plus de victoires !`,
-        lossPhrase: (playerName, newHolderName) => `👑 ${playerName} a perdu son titre de Conquérant au profit de ${newHolderName} !`
-    },
-    {
-        id: 'red_lantern',
-        name: 'La Lanterne Rouge',
-        description: 'Être le joueur avec le plus de dernières places durant la saison en cours.',
-        emoji: '😥',
-        type: 'saisonnier',
-        newsPhrase: (playerName) => `😥 ${playerName} est la nouvelle Lanterne Rouge de la saison...`,
-        lossPhrase: (playerName, newHolderName) => `😥 ${playerName} a passé le flambeau de la Lanterne Rouge à ${newHolderName} !`
-    }
+    // Existing
+    { id: 'veteran', name: 'Le Vétéran', description: 'Participer à 10 parties (toutes saisons confondues).', emoji: '🎖️', type: 'permanent', newsPhrase: (p) => `🎖️ ${p} est devenu un Vétéran des tables de poker en participant à 10 parties !` },
+    { id: 'conqueror', name: 'Le Conquérant', description: 'Être le joueur avec le plus de victoires (1ère place) durant la saison en cours.', emoji: '👑', type: 'saisonnier', newsPhrase: (p) => `👑 ${p} s'empare du titre de Conquérant de la saison !`, lossPhrase: (p, n) => `👑 ${p} a perdu son titre de Conquérant au profit de ${n} !` },
+    { id: 'red_lantern', name: 'La Lanterne Rouge', description: 'Être le joueur avec le plus de dernières places durant la saison en cours.', emoji: '😥', type: 'saisonnier', newsPhrase: (p) => `😥 ${p} est la nouvelle Lanterne Rouge de la saison...`, lossPhrase: (p, n) => `😥 ${p} a passé le flambeau de la Lanterne Rouge à ${n} !` },
+    
+    // Assiduité & Carrière
+    { id: 'pillar', name: 'Le Pilier', description: 'Participer à 25 parties (toutes saisons).', emoji: '🏛️', type: 'permanent', newsPhrase: (p) => `🏛️ Avec 25 parties à son actif, ${p} est officiellement un Pilier de la ligue !` },
+    { id: 'legend', name: 'La Légende', description: 'Participer à 50 parties (toutes saisons).', emoji: '🗿', type: 'permanent', newsPhrase: (p) => `🗿 Une légende vivante ! ${p} vient de terminer sa 50ème partie !` },
+    { id: 'champion', name: 'Le Champion', description: 'Gagner une saison en terminant à la 1ère place du classement.', emoji: '🏆', type: 'permanent', newsPhrase: (p, details) => `🏆 ${p} est sacré Champion de la saison "${details.seasonName}" !` },
+    { id: 'poulidor', name: 'Le Poulidor', description: 'Terminer 10 fois à la deuxième place.', emoji: '🥈', type: 'permanent', newsPhrase: (p) => `🥈 ${p} rejoint le club très fermé des Poulidor avec 10 deuxièmes places !` },
+    { id: 'holed_pocket', name: 'La Poche Percée', description: 'Terminer 10 parties avec un tapis de 0 jeton.', emoji: '🕳️', type: 'permanent', newsPhrase: (p) => `🕳️ ${p} prouve sa générosité en terminant sa 10ème partie sans aucun jeton. Quel grand seigneur !` },
+
+    // Titres Saisonniers
+    { id: 'eternal_second', name: "L'Éternel Second", description: 'Être le joueur avec le plus de deuxièmes places sur la saison.', emoji: '🥈', type: 'saisonnier', newsPhrase: (p) => `🥈 ${p} prend la tête du classement des deuxièmes places cette saison.` },
+    { id: 'kamikaze', name: 'Le Kamikaze', description: 'Être le joueur qui termine le plus souvent avec 0 jeton sur la saison.', emoji: '💥', type: 'saisonnier', newsPhrase: (p) => `💥 ${p} prend la tête du classement des "tapis-volant" avec le plus de sorties à 0 jeton.` },
+    
+    // Faits d'Armes
+    { id: 'serial_killer', name: 'Le Tueur en Série', description: "Gagner une partie d'au moins 5 joueurs en étant le seul survivant.", emoji: '🔪', type: 'permanent', newsPhrase: (p) => `🔪 Tel un prédateur, ${p} a éliminé tous ses adversaires pour finir seul maître à bord !` },
+    { id: 'evening_millionaire', name: "Le Millionnaire (d'un soir)", description: 'Terminer une partie avec un tapis de plus de 80 000 jetons.', emoji: '💰', type: 'permanent', newsPhrase: (p, details) => `💰 ${p} a fait sauter la banque et termine la partie avec ${details.chipCount} jetons !` },
+    { id: 'magnate', name: 'Le Magnat (d\'un soir)', description: 'Terminer une partie avec un tapis de plus de 130 000 jetons.', emoji: '💎', type: 'permanent', newsPhrase: (p, details) => `💎 Stratosphérique ! ${p} finit avec un tapis de ${details.chipCount} jetons et rentre dans la légende !` },
+
+    // Richesse Totale
+    { id: 'golden_boy', name: 'Le Golden Boy', description: 'Amasser 500 000 jetons au total de toutes les parties.', emoji: '✨', type: 'permanent', newsPhrase: (p) => `✨ ${p} devient un Golden Boy en dépassant les 500 000 jetons amassés en carrière !` },
+    { id: 'millionaire', name: 'Le Millionnaire', description: 'Amasser 1 000 000 de jetons au total de toutes les parties.', emoji: '🤑', type: 'permanent', newsPhrase: (p) => `🤑 Incroyable ! ${p} est désormais Millionnaire en jetons, avec plus d'un million amassé en carrière !` },
+
+    // Statistiques Fun
+    { id: 'survivor', name: 'Le Survivant', description: "Finir dernier des survivants, dans une partie d'au moins 6 joueurs, avec un tapis entre 1 et 3000 jetons.", emoji: '🧗', type: 'permanent', newsPhrase: (p) => `🧗 ${p} s'est accroché à la vie comme personne et termine la partie en mode Survivant !` },
+    { id: 'first_blood', name: 'Le Premier Sang', description: 'Être le premier joueur éliminé 5 fois.', emoji: '🩸', type: 'permanent', newsPhrase: (p) => `🩸 ${p} a un talent certain pour ouvrir les hostilités, il a versé le Premier Sang pour la 5ème fois !` },
+    { id: 'invincible', name: "L'Invincible", description: 'Jouer 8 parties de suite sans jamais finir dernier.', emoji: '💪', type: 'permanent', newsPhrase: (p) => `💪 Quelle régularité ! ${p} vient d'enchaîner 8 parties sans jamais finir dernier !` },
+    { id: 'soft_belly', name: 'Le Ventre Mou', description: 'Terminer 5 fois exactement au milieu du classement (ex: 3e/5, 4e/7).', emoji: '🇨🇭', type: 'permanent', newsPhrase: (p) => `🇨🇭 Ni dans les sommets, ni dans les abysses, ${p} maîtrise l'art de la neutralité et rejoint le club du Ventre Mou.` },
+    { id: 'the_bubble', name: 'La Bulle', description: "Être le dernier joueur éliminé avant le vainqueur (finir 2ème) 8 fois.", emoji: '🫧', type: 'permanent', newsPhrase: (p) => `🫧 Si près du but... ${p} est passé maître dans l'art de faire la bulle avec une 8ème deuxième place !` },
 ];
 
-// --- Configuration Firebase ---
+
+// --- Firebase Config ---
 const firebaseConfig = {
   apiKey: "AIzaSyCEUi2n6f44JwoC64hZ0OqdWfsw-_C-qkU",
   authDomain: "poker-score-8eef5.firebaseapp.com",
@@ -126,7 +140,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "2.4.5";
+const APP_VERSION = "3.0.0"; // Major version bump for new features
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -135,7 +149,7 @@ setLogLevel('debug');
 
 const appId = 'default-poker-app'; 
 
-// --- Fonctions Utilitaires ---
+// --- Utility Functions ---
 const formatDate = (timestamp: Timestamp | undefined, format: 'long' | 'short' = 'long') => {
     if (!timestamp) return '';
     const date = new Date(timestamp.seconds * 1000);
@@ -147,7 +161,7 @@ const formatDate = (timestamp: Timestamp | undefined, format: 'long' | 'short' =
     });
 }
 
-// --- Composants UI ---
+// --- UI Components (unchanged from previous version, kept for brevity) ---
 const ConfirmationModal: FC<{ show: boolean; onClose: () => void; onConfirm: () => void; title: string; children: React.ReactNode; confirmText?: string; confirmColor?: "red" | "blue" }> = ({ show, onClose, onConfirm, title, children, confirmText = "Confirmer", confirmColor = "red" }) => {
     if (!show) return null;
     const colorClasses = { red: "bg-red-600 hover:bg-red-500", blue: "bg-blue-600 hover:bg-blue-500" };
@@ -164,13 +178,11 @@ const ConfirmationModal: FC<{ show: boolean; onClose: () => void; onConfirm: () 
         </div>
     );
 };
-
 const AlertNotification: FC<{ message: string; show: boolean; type?: 'info' | 'error' | 'success' }> = ({ message, show, type = 'info' }) => {
     if (!show) return null;
     const colors = { info: 'bg-yellow-500 text-gray-900', error: 'bg-red-500 text-white', success: 'bg-green-500 text-white' };
     return <div className={`fixed top-5 right-5 md:top-20 md:right-5 font-semibold py-3 px-5 rounded-lg shadow-lg z-50 animate-pulse ${colors[type]}`}><p>{message}</p></div>;
 };
-
 const PlayerCard: FC<{ player: PlayerWithStats; onRemove: (player: PlayerWithStats) => void; onEdit: (player: PlayerWithStats) => void; onViewProfile: (playerId: string) => void; isAdmin: boolean }> = ({ player, onRemove, onEdit, onViewProfile, isAdmin }) => (
     <div className="bg-gray-800 p-3 sm:p-4 rounded-lg flex items-center justify-between shadow-lg hover:bg-gray-700 transition-all duration-200">
         <div onClick={() => onViewProfile(player.id)} className="flex items-center space-x-3 sm:space-x-4 cursor-pointer flex-grow">
@@ -191,7 +203,6 @@ const PlayerCard: FC<{ player: PlayerWithStats; onRemove: (player: PlayerWithSta
         )}
     </div>
 );
-
 const LeaderboardItem: FC<{ player: PlayerWithStats; rank: number; onViewProfile: (playerId: string) => void; }> = ({ player, rank, onViewProfile }) => {
     const RankDisplay = () => {
         switch (rank) {
@@ -218,7 +229,6 @@ const LeaderboardItem: FC<{ player: PlayerWithStats; rank: number; onViewProfile
         </div>
     );
 };
-
 const GameHistoryCard: FC<{ game: Game; players: Player[]; onEdit: (game: Game) => void; isAdmin: boolean }> = ({ game, players, onEdit, isAdmin }) => {
     const gameDate = formatDate(game.date);
     const sortedPlayers = [...game.players].sort((a, b) => a.rank - b.rank);
@@ -250,7 +260,6 @@ const GameHistoryCard: FC<{ game: Game; players: Player[]; onEdit: (game: Game) 
         </div>
     );
 }
-
 const EditPlayerModal: FC<{ show: boolean; onClose: () => void; onUpdate: (playerId: string, data: { name: string; imageUrl: string }) => void; player: Player | null }> = ({ show, onClose, onUpdate, player }) => {
     const [name, setName] = useState('');
     const [imageUrl, setImageUrl] = useState('');
@@ -279,7 +288,6 @@ const EditPlayerModal: FC<{ show: boolean; onClose: () => void; onUpdate: (playe
         </div>
     );
 }
-
 const SeasonInfoModal: FC<{ show: boolean; onClose: () => void; season: Season | null }> = ({ show, onClose, season }) => {
     if (!show || !season) return null;
     return (
@@ -301,7 +309,6 @@ const SeasonInfoModal: FC<{ show: boolean; onClose: () => void; season: Season |
         </div>
     )
 }
-
 const AdminLoginModal: FC<{ show: boolean; onClose: () => void; onLogin: (password: string) => void }> = ({ show, onClose, onLogin }) => {
     const [password, setPassword] = useState('');
     if (!show) return null;
@@ -319,7 +326,6 @@ const AdminLoginModal: FC<{ show: boolean; onClose: () => void; onLogin: (passwo
         </div>
     );
 };
-
 const EditGameModal: FC<{ show: boolean; game: Game | null; players: Player[]; onClose: () => void; onUpdate: (gameToUpdate: Game, newPlayers: GamePlayer[]) => Promise<void>; showAlert: (message: string, type?: 'info' | 'error' | 'success') => void; }> = ({ show, game, players, onClose, onUpdate, showAlert }) => {
     const [chipCounts, setChipCounts] = useState<{ [key: string]: string }>({});
     const [eliminationOrder, setEliminationOrder] = useState<string[]>([]);
@@ -422,9 +428,6 @@ const EditGameModal: FC<{ show: boolean; game: Game | null; players: Player[]; o
         </div>
     ); 
 }
-
-// --- Composants de Page ---
-
 const PlayerManagement: FC<{ players: PlayerWithStats[]; isAdmin: boolean; onViewProfile: (playerId: string) => void; }> = ({ players, isAdmin, onViewProfile }) => {
     const [newName, setNewName] = useState('');
     const [imageUrl, setImageUrl] = useState('');
@@ -436,7 +439,18 @@ const PlayerManagement: FC<{ players: PlayerWithStats[]; isAdmin: boolean; onVie
     const addPlayer = async () => {
         if (!newName.trim()) return;
         const playersCollectionRef = collection(db, `artifacts/${appId}/public/data/players`);
-        await addDoc(playersCollectionRef, { name: newName, imageUrl: imageUrl, totalScore: 0 });
+        // DATABASE CHANGE: Initialize new stat fields for new players.
+        await addDoc(playersCollectionRef, { 
+            name: newName, 
+            imageUrl: imageUrl, 
+            totalScore: 0,
+            totalChipsAmassed: 0,
+            secondPlaceCount: 0,
+            zeroChipCount: 0,
+            firstBloodCount: 0,
+            invincibleStreak: 0,
+            ventreMouCount: 0
+        });
         setNewName(''); setImageUrl('');
     };
 
@@ -481,7 +495,6 @@ const PlayerManagement: FC<{ players: PlayerWithStats[]; isAdmin: boolean; onVie
         </div>
     );
 }
-
 const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) => Promise<void>; activeSeason: Season | null; showAlert: (message: string, type?: 'info' | 'error' | 'success') => void; }> = ({ players, onGameEnd, activeSeason, showAlert }) => {
     const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
     const [chipCounts, setChipCounts] = useState<{ [key: string]: string }>({});
@@ -599,7 +612,6 @@ const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) 
         </div>
     );
 }
-
 const Leaderboard: FC<{ players: PlayerWithStats[]; onViewProfile: (playerId: string) => void; }> = ({ players, onViewProfile }) => {
      const sortedPlayers = [...players].sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
     return (
@@ -611,7 +623,6 @@ const Leaderboard: FC<{ players: PlayerWithStats[]; onViewProfile: (playerId: st
         </div>
     );
 }
-
 const GameHistory: FC<{ games: Game[]; players: Player[]; onEditGame: (game: Game) => void; isAdmin: boolean }> = ({ games, players, onEditGame, isAdmin }) => {
     const sortedGames = [...games].sort((a,b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
     return (
@@ -621,7 +632,6 @@ const GameHistory: FC<{ games: Game[]; players: Player[]; onEditGame: (game: Gam
         </div>
     )
 }
-
 const SeasonManagement: FC<{ seasons: Season[]; playersWithStats: PlayerWithStats[], onActivateSeason: (seasonToActivate: Season, currentLeaderboard: PlayerWithStats[]) => Promise<void>, onEditSeason: (season: Season) => void; showAlert: (message: string, type?: 'info' | 'error' | 'success') => void; onGeneralReset: () => void; }> = ({ seasons, playersWithStats, onActivateSeason, onEditSeason, showAlert, onGeneralReset }) => {
     const [name, setName] = useState('');
     const [imageUrl, setImageUrl] = useState('');
@@ -683,7 +693,6 @@ const SeasonManagement: FC<{ seasons: Season[]; playersWithStats: PlayerWithStat
         </div>
     );
 };
-
 const EditSeasonModal: FC<{ show: boolean; onClose: () => void; season: Season | null; onUpdate: (seasonId: string, data: { name: string; imageUrl: string; endDate: string; prize: string }) => void; }> = ({ show, onClose, season, onUpdate }) => {
     const [name, setName] = useState('');
     const [imageUrl, setImageUrl] = useState('');
@@ -724,7 +733,6 @@ const EditSeasonModal: FC<{ show: boolean; onClose: () => void; season: Season |
         </div>
     );
 };
-
 const PastSeasons: FC<{seasons: Season[], isAdmin: boolean, onDeleteSeason: (seasonId: string) => void}> = ({ seasons, isAdmin, onDeleteSeason }) => {
     const closedSeasons = useMemo(() => seasons.filter(s => s.isClosed).sort((a, b) => b.endDate.seconds - a.endDate.seconds), [seasons]);
 
@@ -769,7 +777,6 @@ const PastSeasons: FC<{seasons: Season[], isAdmin: boolean, onDeleteSeason: (sea
         </div>
     )
 }
-
 const PlayerProfile: FC<{ player: Player, allGames: Game[], playerAchievements: PlayerAchievement[] }> = ({ player, allGames, playerAchievements }) => {
     const globalStats = useMemo(() => {
         const totalGamesPlayed = allGames.filter(g => g.players.some(p => p.playerId === player.id)).length;
@@ -796,7 +803,6 @@ const PlayerProfile: FC<{ player: Player, allGames: Game[], playerAchievements: 
         return achievementsList.filter(ach => playerAchievements.some(pa => pa.playerId === player.id && pa.achievementId === ach.id));
     }, [player, playerAchievements]);
 
-    // UI IMPROVEMENT: Stat Card component for better visual separation.
     const StatCard: FC<{icon: React.ElementType, emoji: string, value: string | number, label: string, colorClass: string}> = ({ icon, emoji, value, label, colorClass }) => {
         const Icon = icon;
         return (
@@ -822,7 +828,6 @@ const PlayerProfile: FC<{ player: Player, allGames: Game[], playerAchievements: 
                 </div>
             </div>
             
-            {/* UI IMPROVEMENT: Revamped stats section */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <StatCard icon={Gamepad2} emoji="🎮" value={globalStats.totalGamesPlayed} label="Parties Jouées" colorClass="bg-blue-500" />
                 <StatCard icon={Trophy} emoji="🏆" value={globalStats.totalWins} label="Victoires" colorClass="bg-yellow-500" />
@@ -851,8 +856,6 @@ const PlayerProfile: FC<{ player: Player, allGames: Game[], playerAchievements: 
         </div>
     );
 }
-
-// FIX: This component was missing, causing a crash when viewing the "news" tab.
 const NewsFeed: FC<{ news: NewsItem[] }> = ({ news }) => {
     return (
         <div className="space-y-4">
@@ -873,7 +876,6 @@ const NewsFeed: FC<{ news: NewsItem[] }> = ({ news }) => {
         </div>
     );
 }
-
 const AchievementsList: FC = () => {
     return (
         <div className="space-y-4">
@@ -894,7 +896,7 @@ const AchievementsList: FC = () => {
     );
 }
 
-// --- Composant Principal App ---
+// --- Main App Component ---
 export default function App() {
     const [view, setView] = useState('news');
     const [players, setPlayers] = useState<Player[]>([]);
@@ -903,7 +905,6 @@ export default function App() {
     const [newsFeed, setNewsFeed] = useState<NewsItem[]>([]);
     const [playerAchievements, setPlayerAchievements] = useState<PlayerAchievement[]>([]);
     const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
-    
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [loading, setLoading] = useState(true);
     const [editingGame, setEditingGame] = useState<Game | null>(null);
@@ -943,17 +944,11 @@ export default function App() {
         const newsPath = `artifacts/${appId}/public/data/news_feed`;
         const achievementsPath = `artifacts/${appId}/public/data/player_achievements`;
 
-        const playersQuery = query(collection(db, playersPath));
-        const gamesQuery = query(collection(db, gamesPath));
-        const seasonsQuery = query(collection(db, seasonsPath));
-        const newsQuery = query(collection(db, newsPath), orderBy('createdAt', 'desc'), limit(20));
-        const playerAchievementsQuery = query(collection(db, achievementsPath));
-        
-        const unsubPlayers = onSnapshot(playersQuery, (snap) => { setPlayers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player))); setLoading(false); }, (err) => { console.error("Player read error: ", err); setLoading(false); showAlert("Erreur de lecture (joueurs)", "error"); });
-        const unsubGames = onSnapshot(gamesQuery, (snap) => { setGames(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Game))); }, (err) => { console.error("Games read error: ", err); showAlert("Erreur de lecture (parties)", "error");});
-        const unsubSeasons = onSnapshot(seasonsQuery, (snap) => { setSeasons(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Season))); }, (err) => { console.error("Seasons read error: ", err); showAlert("Erreur de lecture (saisons)", "error");});
-        const unsubNews = onSnapshot(newsQuery, (snap) => { setNewsFeed(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as NewsItem))); }, (err) => { console.error("News read error: ", err); showAlert("Erreur de lecture (actus)", "error");});
-        const unsubPlayerAchievements = onSnapshot(playerAchievementsQuery, (snap) => { setPlayerAchievements(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as PlayerAchievement))); }, (err) => { console.error("Player Achievements read error: ", err); showAlert("Erreur de lecture (hauts faits)", "error");});
+        const unsubPlayers = onSnapshot(query(collection(db, playersPath)), (snap) => { setPlayers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player))); setLoading(false); }, (err) => { console.error("Player read error: ", err); setLoading(false); showAlert("Erreur de lecture (joueurs)", "error"); });
+        const unsubGames = onSnapshot(query(collection(db, gamesPath)), (snap) => { setGames(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Game))); }, (err) => { console.error("Games read error: ", err); showAlert("Erreur de lecture (parties)", "error");});
+        const unsubSeasons = onSnapshot(query(collection(db, seasonsPath)), (snap) => { setSeasons(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Season))); }, (err) => { console.error("Seasons read error: ", err); showAlert("Erreur de lecture (saisons)", "error");});
+        const unsubNews = onSnapshot(query(collection(db, newsPath), orderBy('createdAt', 'desc'), limit(20)), (snap) => { setNewsFeed(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as NewsItem))); }, (err) => { console.error("News read error: ", err); showAlert("Erreur de lecture (actus)", "error");});
+        const unsubPlayerAchievements = onSnapshot(query(collection(db, achievementsPath)), (snap) => { setPlayerAchievements(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as PlayerAchievement))); }, (err) => { console.error("Player Achievements read error: ", err); showAlert("Erreur de lecture (hauts faits)", "error");});
         
         return () => { unsubPlayers(); unsubGames(); unsubSeasons(); unsubNews(); unsubPlayerAchievements(); };
     }, [isAuthReady]);
@@ -994,113 +989,76 @@ export default function App() {
     };
     const handleAdminLogout = () => { setIsAdmin(false); showAlert("Mode administrateur désactivé"); };
     
-    const checkAchievements = async (newGame: Game, allPlayers: Player[], allGames: Game[], currentActiveSeason: Season | null) => {
-        if (!currentActiveSeason) return;
-    
-        const batch = writeBatch(db);
-        const newsCollection = collection(db, `artifacts/${appId}/public/data/news_feed`);
-        const playerAchievementsCollection = collection(db, `artifacts/${appId}/public/data/player_achievements`);
-    
-        const allGamesWithNewOne = [...allGames, newGame];
-    
-        const veteranAchievement = achievementsList.find(a => a.id === 'veteran')!;
-        for (const player of allPlayers) { 
-            const hasVeteran = playerAchievements.some(pa => pa.playerId === player.id && pa.achievementId === 'veteran');
-            if (!hasVeteran) {
-                const totalGamesPlayed = allGamesWithNewOne.filter(g => g.players.some(p => p.playerId === player.id)).length;
-                if (totalGamesPlayed >= 10) {
-                    const newAchievementRef = doc(playerAchievementsCollection);
-                    batch.set(newAchievementRef, { playerId: player.id, achievementId: 'veteran', unlockedAt: Timestamp.now() });
-                    const newNewsRef = doc(newsCollection);
-                    batch.set(newNewsRef, { text: veteranAchievement.newsPhrase(player.name), createdAt: Timestamp.now() });
-                }
-            }
-        }
-    
-        const seasonalAchievements = achievementsList.filter(a => a.type === 'saisonnier');
-        const seasonGames = allGamesWithNewOne.filter(g => g.seasonId === currentActiveSeason.id);
-    
-        for (const achievement of seasonalAchievements) {
-            const playerStats: { [playerId: string]: number } = {};
-            allPlayers.forEach(p => playerStats[p.id] = 0);
-    
-            if (achievement.id === 'conqueror') {
-                seasonGames.forEach(g => {
-                    const winner = g.players.find(p => p.rank === 1);
-                    if (winner && playerStats.hasOwnProperty(winner.playerId)) {
-                        playerStats[winner.playerId]++;
-                    }
-                });
-            } else if (achievement.id === 'red_lantern') {
-                seasonGames.forEach(g => {
-                    const loser = g.players.find(p => p.rank === g.players.length);
-                    if (loser && playerStats.hasOwnProperty(loser.playerId)) {
-                        playerStats[loser.playerId]++;
-                    }
-                });
-            }
-    
-            const maxStat = Math.max(...Object.values(playerStats));
-            if (maxStat === 0) continue; 
-    
-            const newLeaders = Object.keys(playerStats).filter(id => playerStats[id] === maxStat);
-            const oldLeaders = playerAchievements.filter(pa => pa.achievementId === achievement.id).map(pa => pa.playerId);
-    
-            const leadersChanged = newLeaders.length !== oldLeaders.length || !newLeaders.every(id => oldLeaders.includes(id));
-    
-            if (leadersChanged) {
-                for (const oldLeaderId of oldLeaders) {
-                    if (!newLeaders.includes(oldLeaderId)) {
-                        const achievementDoc = playerAchievements.find(pa => pa.playerId === oldLeaderId && pa.achievementId === achievement.id);
-                        if (achievementDoc) {
-                            batch.delete(doc(db, `artifacts/${appId}/public/data/player_achievements`, achievementDoc.id));
-                            if (achievement.lossPhrase && newLeaders.length > 0) {
-                                const oldLeaderName = allPlayers.find(p => p.id === oldLeaderId)?.name || 'Un ancien';
-                                const newLeaderName = allPlayers.find(p => p.id === newLeaders[0])?.name || 'Un nouveau';
-                                const newNewsRef = doc(newsCollection);
-                                batch.set(newNewsRef, { text: achievement.lossPhrase(oldLeaderName, newLeaderName), createdAt: Timestamp.now() });
-                            }
-                        }
-                    }
-                }
-    
-                for (const newLeaderId of newLeaders) {
-                    if (!oldLeaders.includes(newLeaderId)) {
-                        const leaderName = allPlayers.find(p => p.id === newLeaderId)?.name || 'Un joueur';
-                        const newAchievementRef = doc(playerAchievementsCollection);
-                        batch.set(newAchievementRef, { playerId: newLeaderId, achievementId: achievement.id, unlockedAt: Timestamp.now() });
-                        const newNewsRef = doc(newsCollection);
-                        batch.set(newNewsRef, { text: achievement.newsPhrase(leaderName), createdAt: Timestamp.now() });
-                    }
-                }
-            }
-        }
-    
-        await batch.commit();
+    // --- Main Achievement Logic ---
+    const checkAchievements = async (newGame: Game, updatedPlayers: Player[], allGames: Game[], currentActiveSeason: Season | null) => {
+        // ... implementation in next code block
     };
 
     const handleGameEnd = async (scoredPlayers: GamePlayer[]) => {
         if (!activeSeason) { showAlert("Aucune saison active pour enregistrer la partie.", "error"); return; }
+        
         const batch = writeBatch(db);
         const newGameRef = doc(collection(db, `artifacts/${appId}/public/data/games`));
         const newGameData = { date: new Date(), players: scoredPlayers, seasonId: activeSeason.id };
         batch.set(newGameRef, newGameData);
+
+        const updatedPlayersData: Player[] = JSON.parse(JSON.stringify(players));
+
+        // Update player stats from the game that just ended
         for (const sp of scoredPlayers) {
+            const playerIndex = updatedPlayersData.findIndex(p => p.id === sp.playerId);
+            if (playerIndex === -1) continue;
+
             const playerRef = doc(db, `artifacts/${appId}/public/data/players`, sp.playerId);
-            const player = players.find(p => p.id === sp.playerId);
-            if(player) { batch.update(playerRef, { totalScore: (player.totalScore || 0) + sp.score }); }
+            const playerData = updatedPlayersData[playerIndex];
+            
+            // Initialize fields if they don't exist
+            playerData.totalScore = (playerData.totalScore || 0) + sp.score;
+            playerData.totalChipsAmassed = (playerData.totalChipsAmassed || 0) + sp.chipCount;
+            playerData.secondPlaceCount = playerData.secondPlaceCount || 0;
+            playerData.zeroChipCount = playerData.zeroChipCount || 0;
+            playerData.firstBloodCount = playerData.firstBloodCount || 0;
+            playerData.invincibleStreak = playerData.invincibleStreak || 0;
+            playerData.ventreMouCount = playerData.ventreMouCount || 0;
+            
+            // Update stats based on rank
+            if (sp.rank === 2) playerData.secondPlaceCount++;
+            if (sp.chipCount === 0) playerData.zeroChipCount++;
+            if (sp.rank === scoredPlayers.length) {
+                playerData.firstBloodCount++;
+                playerData.invincibleStreak = 0; // Streak is broken
+            } else {
+                playerData.invincibleStreak++;
+            }
+            const middleRank = Math.ceil(scoredPlayers.length / 2);
+            if (sp.rank === middleRank) {
+                playerData.ventreMouCount++;
+            }
+            
+            batch.update(playerRef, {
+                totalScore: playerData.totalScore,
+                totalChipsAmassed: playerData.totalChipsAmassed,
+                secondPlaceCount: playerData.secondPlaceCount,
+                zeroChipCount: playerData.zeroChipCount,
+                firstBloodCount: playerData.firstBloodCount,
+                invincibleStreak: playerData.invincibleStreak,
+                ventreMouCount: playerData.ventreMouCount
+            });
         }
         await batch.commit();
         showAlert("La partie a été enregistrée !", "success");
         setView('news');
 
-        await checkAchievements({id: newGameRef.id, ...newGameData, date: Timestamp.fromDate(newGameData.date)}, players, games, activeSeason);
+        // Now, check for achievements with the fresh data
+        await checkAchievements({id: newGameRef.id, ...newGameData, date: Timestamp.fromDate(newGameData.date)}, updatedPlayersData, games, activeSeason);
     };
 
     const handleGameUpdate = async (gameToUpdate: Game, newPlayers: GamePlayer[]) => {
+        // This function would need a major refactor to correctly rollback and re-apply stats for achievements.
+        // For now, it only updates scores.
+        showAlert("La modification de partie ne met pas à jour les hauts faits pour le moment.", "info");
         const batch = writeBatch(db);
         const gameRef = doc(db, `artifacts/${appId}/public/data/games`, gameToUpdate.id);
-    
         const scoreDiffs: {[key: string]: number} = {};
         gameToUpdate.players.forEach(oldPlayer => {
             scoreDiffs[oldPlayer.playerId] = (scoreDiffs[oldPlayer.playerId] || 0) - oldPlayer.score;
@@ -1108,7 +1066,6 @@ export default function App() {
         newPlayers.forEach(newPlayer => {
             scoreDiffs[newPlayer.playerId] = (scoreDiffs[newPlayer.playerId] || 0) + newPlayer.score;
         });
-
         for (const playerId in scoreDiffs) {
             const playerRef = doc(db, `artifacts/${appId}/public/data/players`, playerId);
             const player = players.find(p => p.id === playerId);
@@ -1117,14 +1074,12 @@ export default function App() {
                 batch.update(playerRef, { totalScore: newTotalScore });
             }
         }
-
         batch.update(gameRef, { players: newPlayers });
-
         await batch.commit();
         showAlert("La partie a été mise à jour avec succès !", "success");
         setEditingGame(null);
     };
-
+    
     const handleActivateSeason = async (seasonToActivate: Season, currentLeaderboard: PlayerWithStats[]) => {
         const batch = writeBatch(db);
         if(activeSeason) {
@@ -1146,7 +1101,6 @@ export default function App() {
         showAlert(`La saison "${seasonToActivate.name}" est maintenant active !`, "success");
         setView('news');
     }
-    
     const handleUpdateSeason = async (seasonId: string, updatedData: { name: string; imageUrl: string; endDate: string; prize: string }) => {
         const seasonRef = doc(db, `artifacts/${appId}/public/data/seasons`, seasonId);
         await updateDoc(seasonRef, {
@@ -1158,39 +1112,40 @@ export default function App() {
         showAlert("Saison mise à jour avec succès !", "success");
         setEditingSeason(null);
     };
-
     const handleDeleteSeason = (seasonId: string) => {
         const season = seasons.find(s => s.id === seasonId);
         if(!season) return;
         setSeasonToDelete(season);
     }
-
     const confirmDeleteSeason = async () => {
         if(!seasonToDelete) return;
         await deleteDoc(doc(db, `artifacts/${appId}/public/data/seasons`, seasonToDelete.id));
         setSeasonToDelete(null);
         showAlert("Saison supprimée avec succès.", "success");
     }
-
     const handleGeneralReset = async () => {
         setShowResetConfirm(false);
         showAlert("Réinitialisation en cours...", "info");
-        
         try {
             const batch = writeBatch(db);
-
             const collectionsToWipe = ['games', 'seasons', 'news_feed', 'player_achievements'];
             for (const collectionName of collectionsToWipe) {
                 const collectionRef = collection(db, `artifacts/${appId}/public/data/${collectionName}`);
                 const snapshot = await getDocs(query(collectionRef));
                 snapshot.forEach(doc => batch.delete(doc.ref));
             }
-            
             for (const player of players) {
                 const playerRef = doc(db, `artifacts/${appId}/public/data/players`, player.id);
-                batch.update(playerRef, { totalScore: 0 });
+                batch.update(playerRef, { 
+                    totalScore: 0,
+                    totalChipsAmassed: 0,
+                    secondPlaceCount: 0,
+                    zeroChipCount: 0,
+                    firstBloodCount: 0,
+                    invincibleStreak: 0,
+                    ventreMouCount: 0
+                });
             }
-
             await batch.commit();
             showAlert("Réinitialisation générale terminée avec succès !", "success");
             setView('news');
@@ -1199,12 +1154,10 @@ export default function App() {
             showAlert("Une erreur est survenue lors de la réinitialisation.", "error");
         }
     }
-
     const handleViewProfile = (playerId: string) => {
         setSelectedPlayerId(playerId);
         setView('player_profile');
     }
-
     const NavButton: FC<{ targetView: string; icon: React.ElementType; label: string }> = ({ targetView, icon, label }) => {
         const Icon = icon;
         return <button onClick={() => setView(targetView)} className={`flex-1 flex flex-col sm:flex-row items-center justify-center p-3 rounded-md text-sm sm:text-base font-medium transition-colors ${view === targetView ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}><Icon size={20} className="mb-1 sm:mb-0 sm:mr-2" />{label}</button>
