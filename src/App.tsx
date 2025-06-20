@@ -24,7 +24,6 @@ import type { Firestore } from 'firebase/firestore';
 import { Lock, Unlock, PlusCircle, Trash2, Crown, Users, Trophy, Gamepad2, History, Pencil, LayoutGrid, Info, PlayCircle, Archive, ArchiveRestore, RefreshCw, LogOut, Newspaper, Medal, AlertTriangle, BarChart2, Bomb } from 'lucide-react';
 
 // --- Types TypeScript ---
-// DATABASE CHANGE: Added new fields to track career stats for achievements.
 interface Player {
     id: string;
     name: string;
@@ -76,7 +75,7 @@ interface Achievement {
     description: string;
     emoji: string;
     type: 'permanent' | 'saisonnier';
-    isSecret?: boolean; // Future use maybe?
+    isSecret?: boolean; 
     newsPhrase: (playerName: string, details?: any) => string;
     lossPhrase?: (playerName: string, newHolderName: string) => string;
 }
@@ -96,39 +95,27 @@ interface NewsItem {
 
 // --- Achievements Configuration ---
 const achievementsList: Achievement[] = [
-    // Existing
     { id: 'veteran', name: 'Le Vétéran', description: 'Participer à 10 parties (toutes saisons confondues).', emoji: '🎖️', type: 'permanent', newsPhrase: (p) => `🎖️ ${p} est devenu un Vétéran des tables de poker en participant à 10 parties !` },
     { id: 'conqueror', name: 'Le Conquérant', description: 'Être le joueur avec le plus de victoires (1ère place) durant la saison en cours.', emoji: '👑', type: 'saisonnier', newsPhrase: (p) => `👑 ${p} s'empare du titre de Conquérant de la saison !`, lossPhrase: (p, n) => `👑 ${p} a perdu son titre de Conquérant au profit de ${n} !` },
     { id: 'red_lantern', name: 'La Lanterne Rouge', description: 'Être le joueur avec le plus de dernières places durant la saison en cours.', emoji: '😥', type: 'saisonnier', newsPhrase: (p) => `😥 ${p} est la nouvelle Lanterne Rouge de la saison...`, lossPhrase: (p, n) => `😥 ${p} a passé le flambeau de la Lanterne Rouge à ${n} !` },
-    
-    // Assiduité & Carrière
     { id: 'pillar', name: 'Le Pilier', description: 'Participer à 25 parties (toutes saisons).', emoji: '🏛️', type: 'permanent', newsPhrase: (p) => `🏛️ Avec 25 parties à son actif, ${p} est officiellement un Pilier de la ligue !` },
     { id: 'legend', name: 'La Légende', description: 'Participer à 50 parties (toutes saisons).', emoji: '🗿', type: 'permanent', newsPhrase: (p) => `🗿 Une légende vivante ! ${p} vient de terminer sa 50ème partie !` },
     { id: 'champion', name: 'Le Champion', description: 'Gagner une saison en terminant à la 1ère place du classement.', emoji: '🏆', type: 'permanent', newsPhrase: (p, details) => `🏆 ${p} est sacré Champion de la saison "${details.seasonName}" !` },
     { id: 'poulidor', name: 'Le Poulidor', description: 'Terminer 10 fois à la deuxième place.', emoji: '🥈', type: 'permanent', newsPhrase: (p) => `🥈 ${p} rejoint le club très fermé des Poulidor avec 10 deuxièmes places !` },
     { id: 'holed_pocket', name: 'La Poche Percée', description: 'Terminer 10 parties avec un tapis de 0 jeton.', emoji: '🕳️', type: 'permanent', newsPhrase: (p) => `🕳️ ${p} prouve sa générosité en terminant sa 10ème partie sans aucun jeton. Quel grand seigneur !` },
-
-    // Titres Saisonniers
     { id: 'eternal_second', name: "L'Éternel Second", description: 'Être le joueur avec le plus de deuxièmes places sur la saison.', emoji: '🥈', type: 'saisonnier', newsPhrase: (p) => `🥈 ${p} prend la tête du classement des deuxièmes places cette saison.` },
     { id: 'kamikaze', name: 'Le Kamikaze', description: 'Être le joueur qui termine le plus souvent avec 0 jeton sur la saison.', emoji: '💥', type: 'saisonnier', newsPhrase: (p) => `💥 ${p} prend la tête du classement des "tapis-volant" avec le plus de sorties à 0 jeton.` },
-    
-    // Faits d'Armes
     { id: 'serial_killer', name: 'Le Tueur en Série', description: "Gagner une partie d'au moins 5 joueurs en étant le seul survivant.", emoji: '🔪', type: 'permanent', newsPhrase: (p) => `🔪 Tel un prédateur, ${p} a éliminé tous ses adversaires pour finir seul maître à bord !` },
     { id: 'evening_millionaire', name: "Le Millionnaire (d'un soir)", description: 'Terminer une partie avec un tapis de plus de 80 000 jetons.', emoji: '💰', type: 'permanent', newsPhrase: (p, details) => `💰 ${p} a fait sauter la banque et termine la partie avec ${details.chipCount} jetons !` },
     { id: 'magnate', name: 'Le Magnat (d\'un soir)', description: 'Terminer une partie avec un tapis de plus de 130 000 jetons.', emoji: '💎', type: 'permanent', newsPhrase: (p, details) => `💎 Stratosphérique ! ${p} finit avec un tapis de ${details.chipCount} jetons et rentre dans la légende !` },
-
-    // Richesse Totale
     { id: 'golden_boy', name: 'Le Golden Boy', description: 'Amasser 500 000 jetons au total de toutes les parties.', emoji: '✨', type: 'permanent', newsPhrase: (p) => `✨ ${p} devient un Golden Boy en dépassant les 500 000 jetons amassés en carrière !` },
     { id: 'millionaire', name: 'Le Millionnaire', description: 'Amasser 1 000 000 de jetons au total de toutes les parties.', emoji: '🤑', type: 'permanent', newsPhrase: (p) => `🤑 Incroyable ! ${p} est désormais Millionnaire en jetons, avec plus d'un million amassé en carrière !` },
-
-    // Statistiques Fun
     { id: 'survivor', name: 'Le Survivant', description: "Finir dernier des survivants, dans une partie d'au moins 6 joueurs, avec un tapis entre 1 et 3000 jetons.", emoji: '🧗', type: 'permanent', newsPhrase: (p) => `🧗 ${p} s'est accroché à la vie comme personne et termine la partie en mode Survivant !` },
     { id: 'first_blood', name: 'Le Premier Sang', description: 'Être le premier joueur éliminé 5 fois.', emoji: '🩸', type: 'permanent', newsPhrase: (p) => `🩸 ${p} a un talent certain pour ouvrir les hostilités, il a versé le Premier Sang pour la 5ème fois !` },
     { id: 'invincible', name: "L'Invincible", description: 'Jouer 8 parties de suite sans jamais finir dernier.', emoji: '💪', type: 'permanent', newsPhrase: (p) => `💪 Quelle régularité ! ${p} vient d'enchaîner 8 parties sans jamais finir dernier !` },
     { id: 'soft_belly', name: 'Le Ventre Mou', description: 'Terminer 5 fois exactement au milieu du classement (ex: 3e/5, 4e/7).', emoji: '🇨🇭', type: 'permanent', newsPhrase: (p) => `🇨🇭 Ni dans les sommets, ni dans les abysses, ${p} maîtrise l'art de la neutralité et rejoint le club du Ventre Mou.` },
     { id: 'the_bubble', name: 'La Bulle', description: "Être le dernier joueur éliminé avant le vainqueur (finir 2ème) 8 fois.", emoji: '🫧', type: 'permanent', newsPhrase: (p) => `🫧 Si près du but... ${p} est passé maître dans l'art de faire la bulle avec une 8ème deuxième place !` },
 ];
-
 
 // --- Firebase Config ---
 const firebaseConfig = {
@@ -140,7 +127,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "3.0.0"; // Major version bump for new features
+const APP_VERSION = "3.0.1";
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
@@ -161,22 +148,11 @@ const formatDate = (timestamp: Timestamp | undefined, format: 'long' | 'short' =
     });
 }
 
-// --- UI Components (unchanged from previous version, kept for brevity) ---
+// --- UI Components (unchanged) ---
 const ConfirmationModal: FC<{ show: boolean; onClose: () => void; onConfirm: () => void; title: string; children: React.ReactNode; confirmText?: string; confirmColor?: "red" | "blue" }> = ({ show, onClose, onConfirm, title, children, confirmText = "Confirmer", confirmColor = "red" }) => {
     if (!show) return null;
     const colorClasses = { red: "bg-red-600 hover:bg-red-500", blue: "bg-blue-600 hover:bg-blue-500" };
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
-            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md border border-gray-700">
-                <h3 className="text-xl font-bold text-white mb-4">{title}</h3>
-                <div className="text-gray-300 mb-6">{children}</div>
-                <div className="flex justify-end gap-4">
-                    <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md transition-colors">Annuler</button>
-                    <button onClick={onConfirm} className={`text-white font-bold py-2 px-4 rounded-md transition-colors ${colorClasses[confirmColor]}`}>{confirmText}</button>
-                </div>
-            </div>
-        </div>
-    );
+    return <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4"><div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md border border-gray-700"><h3 className="text-xl font-bold text-white mb-4">{title}</h3><div className="text-gray-300 mb-6">{children}</div><div className="flex justify-end gap-4"><button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md transition-colors">Annuler</button><button onClick={onConfirm} className={`text-white font-bold py-2 px-4 rounded-md transition-colors ${colorClasses[confirmColor]}`}>{confirmText}</button></div></div></div>;
 };
 const AlertNotification: FC<{ message: string; show: boolean; type?: 'info' | 'error' | 'success' }> = ({ message, show, type = 'info' }) => {
     if (!show) return null;
@@ -266,75 +242,25 @@ const EditPlayerModal: FC<{ show: boolean; onClose: () => void; onUpdate: (playe
     useEffect(() => { if (player) { setName(player.name); setImageUrl(player.imageUrl || ''); } }, [player]);
     if (!show || !player) return null;
     const handleSave = () => { if (name.trim()) onUpdate(player.id, { name, imageUrl }); };
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
-            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-gray-700">
-                <h3 className="text-xl font-bold text-white mb-4">Éditer le joueur</h3>
-                <div className="space-y-4 my-6">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-1">Nom du joueur</label>
-                        <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-1">URL de l'image</label>
-                         <input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="(Optionnel)" className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-                    </div>
-                </div>
-                <div className="flex justify-end gap-4">
-                    <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Annuler</button>
-                    <button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-md">Enregistrer</button>
-                </div>
-            </div>
-        </div>
-    );
+    return <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4"><div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-gray-700"><h3 className="text-xl font-bold text-white mb-4">Éditer le joueur</h3><div className="space-y-4 my-6"><div><label className="block text-sm font-medium text-gray-400 mb-1">Nom du joueur</label><input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/></div><div><label className="block text-sm font-medium text-gray-400 mb-1">URL de l'image</label><input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="(Optionnel)" className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/></div></div><div className="flex justify-end gap-4"><button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Annuler</button><button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-md">Enregistrer</button></div></div></div>;
 }
 const SeasonInfoModal: FC<{ show: boolean; onClose: () => void; season: Season | null }> = ({ show, onClose, season }) => {
     if (!show || !season) return null;
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
-            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-gray-700 text-center">
-                <img src={season.imageUrl || `https://placehold.co/400x200/1f2937/ffffff?text=${season.name}`} alt={`Image pour ${season.name}`} className="w-full h-48 object-cover rounded-md mb-4"/>
-                <h3 className="text-2xl font-bold text-white mb-2">{season.name}</h3>
-                <p className="text-indigo-400 mb-4">Se termine le {formatDate(season.endDate)}</p>
-                {season.prize && (
-                    <div className="bg-gray-700 p-4 rounded-md">
-                        <p className="text-lg font-semibold text-yellow-400">Lot à gagner :</p>
-                        <p className="text-gray-300">{season.prize}</p>
-                    </div>
-                )}
-                 <div className="flex justify-end gap-4 mt-6">
-                    <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Fermer</button>
-                </div>
-            </div>
-        </div>
-    )
+    return <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4"><div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-gray-700 text-center"><img src={season.imageUrl || `https://placehold.co/400x200/1f2937/ffffff?text=${season.name}`} alt={`Image pour ${season.name}`} className="w-full h-48 object-cover rounded-md mb-4"/><h3 className="text-2xl font-bold text-white mb-2">{season.name}</h3><p className="text-indigo-400 mb-4">Se termine le {formatDate(season.endDate)}</p>{season.prize && (<div className="bg-gray-700 p-4 rounded-md"><p className="text-lg font-semibold text-yellow-400">Lot à gagner :</p><p className="text-gray-300">{season.prize}</p></div>)}<div className="flex justify-end gap-4 mt-6"><button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Fermer</button></div></div></div>
 }
 const AdminLoginModal: FC<{ show: boolean; onClose: () => void; onLogin: (password: string) => void }> = ({ show, onClose, onLogin }) => {
     const [password, setPassword] = useState('');
     if (!show) return null;
     const handleLogin = () => { onLogin(password); setPassword(''); }
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
-            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm border border-gray-700">
-                <h3 className="text-xl font-bold text-white mb-4">Accès Administrateur</h3>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleLogin()} placeholder="Mot de passe" className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600 mb-4"/>
-                <div className="flex justify-end gap-4">
-                     <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Fermer</button>
-                     <button onClick={handleLogin} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-md">Connexion</button>
-                </div>
-            </div>
-        </div>
-    );
+    return <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4"><div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm border border-gray-700"><h3 className="text-xl font-bold text-white mb-4">Accès Administrateur</h3><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleLogin()} placeholder="Mot de passe" className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600 mb-4"/><div className="flex justify-end gap-4"><button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Fermer</button><button onClick={handleLogin} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-md">Connexion</button></div></div></div>;
 };
 const EditGameModal: FC<{ show: boolean; game: Game | null; players: Player[]; onClose: () => void; onUpdate: (gameToUpdate: Game, newPlayers: GamePlayer[]) => Promise<void>; showAlert: (message: string, type?: 'info' | 'error' | 'success') => void; }> = ({ show, game, players, onClose, onUpdate, showAlert }) => {
     const [chipCounts, setChipCounts] = useState<{ [key: string]: string }>({});
     const [eliminationOrder, setEliminationOrder] = useState<string[]>([]);
-    
     const gameParticipants = useMemo(() => {
         if (!game) return [];
         return players.filter(p => game.players.some(gp => gp.playerId === p.id));
     }, [game, players]);
-
     useEffect(() => {
         if (game) {
             const initialChips = game.players.reduce((acc, p) => ({ ...acc, [p.playerId]: p.chipCount > 0 ? String(p.chipCount) : '' }), {});
@@ -343,90 +269,32 @@ const EditGameModal: FC<{ show: boolean; game: Game | null; players: Player[]; o
             setEliminationOrder(initialElimination);
         }
     }, [game]);
-
     if (!show || !game) return null;
-
     const handleEliminatePlayer = (playerId: string) => {
-        if (!eliminationOrder.includes(playerId)) {
-            setEliminationOrder(prev => [...prev, playerId]);
-        }
+        if (!eliminationOrder.includes(playerId)) setEliminationOrder(prev => [...prev, playerId]);
     };
-    
     const handleChipCountChange = (playerId: string, value: string) => {
         setChipCounts(prev => ({...prev, [playerId]: value}));
-        if(value && parseInt(value, 10) >= 0) {
-            setEliminationOrder(prev => prev.filter(id => id !== playerId));
-        }
+        if(value && parseInt(value, 10) >= 0) setEliminationOrder(prev => prev.filter(id => id !== playerId));
     }
-    
     const resetEliminations = () => {
         setEliminationOrder([]);
         setChipCounts({});
     };
-
     const handleSaveChanges = async () => {
         const totalPlayers = gameParticipants.length;
-        
         const eliminatedPlayers = eliminationOrder.map((playerId, index) => {
             const player = gameParticipants.find(p => p.id === playerId);
-            return {
-                playerId, name: player?.name || 'Inconnu', chipCount: 0,
-                rank: totalPlayers - index, score: (totalPlayers - (totalPlayers - index)) * 10
-            };
+            return { playerId, name: player?.name || 'Inconnu', chipCount: 0, rank: totalPlayers - index, score: (totalPlayers - (totalPlayers - index)) * 10 };
         });
-
-        const survivors = gameParticipants
-            .filter(p => !eliminationOrder.includes(p.id))
-            .map(p => ({ playerId: p.id, name: p.name, chipCount: parseInt(chipCounts[p.id] || "0", 10) }))
-            .sort((a, b) => b.chipCount - a.chipCount);
-        
+        const survivors = gameParticipants.filter(p => !eliminationOrder.includes(p.id)).map(p => ({ playerId: p.id, name: p.name, chipCount: parseInt(chipCounts[p.id] || "0", 10) })).sort((a, b) => b.chipCount - a.chipCount);
         const survivorRankings = survivors.map((survivor, index) => ({ ...survivor, rank: index + 1, score: (totalPlayers - (index + 1)) * 10 }));
-        
         const allRankedPlayers = [...survivorRankings, ...eliminatedPlayers].sort((a,b) => a.rank - b.rank);
-        
-        if(allRankedPlayers.length !== totalPlayers){
-            showAlert("Erreur dans le classement, veuillez vérifier les données.", "error");
-            return;
-        }
-
+        if(allRankedPlayers.length !== totalPlayers){ showAlert("Erreur dans le classement, veuillez vérifier les données.", "error"); return; }
         await onUpdate(game, allRankedPlayers);
         onClose();
     };
-
-    return (
-         <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
-            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-gray-700">
-                <h3 className="text-xl font-bold text-white mb-4">Modifier la partie du {formatDate(game.date)}</h3>
-                <div className="space-y-4 my-6 max-h-[60vh] overflow-y-auto pr-2">
-                     {gameParticipants.map(player => {
-                        const isEliminated = eliminationOrder.includes(player.id);
-                        const eliminationRank = isEliminated ? gameParticipants.length - eliminationOrder.indexOf(player.id) : null;
-                        return (
-                            <div key={player.id} className="flex items-center gap-4 p-2 rounded-lg bg-gray-700">
-                                <img src={player.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full object-cover"/>
-                                <label className="flex-1 text-white font-medium">{player.name}</label>
-                                {isEliminated ? (
-                                    <span className="text-red-400 font-bold">Sorti en {eliminationRank}ème position</span>
-                                ) : (
-                                    <>
-                                        <input type="number" value={chipCounts[player.id] || ''} onChange={e => handleChipCountChange(player.id, e.target.value)} placeholder="Jetons" className="bg-gray-600 text-white p-2 w-28 rounded-md border border-gray-500"/>
-                                        <button onClick={() => handleEliminatePlayer(player.id)} disabled={!!chipCounts[player.id]} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2 disabled:bg-gray-500 disabled:cursor-not-allowed"><LogOut size={16}/>Éliminer</button>
-                                    </>
-                                )}
-                            </div>
-                        )
-                     })}
-                </div>
-                 <div className="flex justify-between items-center pt-4 border-t border-gray-700">
-                    <button onClick={resetEliminations} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2"><RefreshCw size={16}/>Réinitialiser</button>
-                    <div>
-                         <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md mr-2">Annuler</button>
-                         <button onClick={handleSaveChanges} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">Enregistrer</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    ); 
+    return <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4"><div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-gray-700"><h3 className="text-xl font-bold text-white mb-4">Modifier la partie du {formatDate(game.date)}</h3><div className="space-y-4 my-6 max-h-[60vh] overflow-y-auto pr-2">{gameParticipants.map(player => { const isEliminated = eliminationOrder.includes(player.id); const eliminationRank = isEliminated ? gameParticipants.length - eliminationOrder.indexOf(player.id) : null; return <div key={player.id} className="flex items-center gap-4 p-2 rounded-lg bg-gray-700"><img src={player.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full object-cover"/><label className="flex-1 text-white font-medium">{player.name}</label>{isEliminated ? <span className="text-red-400 font-bold">Sorti en {eliminationRank}ème position</span> : <> <input type="number" value={chipCounts[player.id] || ''} onChange={e => handleChipCountChange(player.id, e.target.value)} placeholder="Jetons" className="bg-gray-600 text-white p-2 w-28 rounded-md border border-gray-500"/><button onClick={() => handleEliminatePlayer(player.id)} disabled={!!chipCounts[player.id]} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2 disabled:bg-gray-500 disabled:cursor-not-allowed"><LogOut size={16}/>Éliminer</button></>}</div>})}</div><div className="flex justify-between items-center pt-4 border-t border-gray-700"><button onClick={resetEliminations} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2"><RefreshCw size={16}/>Réinitialiser</button><div><button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md mr-2">Annuler</button><button onClick={handleSaveChanges} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">Enregistrer</button></div></div></div></div>; 
 }
 const PlayerManagement: FC<{ players: PlayerWithStats[]; isAdmin: boolean; onViewProfile: (playerId: string) => void; }> = ({ players, isAdmin, onViewProfile }) => {
     const [newName, setNewName] = useState('');
@@ -435,182 +303,61 @@ const PlayerManagement: FC<{ players: PlayerWithStats[]; isAdmin: boolean; onVie
     const [playerToRemove, setPlayerToRemove] = useState<PlayerWithStats | null>(null);
     const [showEditModal, setShowEditModal] = useState(false);
     const [playerToEdit, setPlayerToEdit] = useState<PlayerWithStats | null>(null);
-
     const addPlayer = async () => {
         if (!newName.trim()) return;
         const playersCollectionRef = collection(db, `artifacts/${appId}/public/data/players`);
-        // DATABASE CHANGE: Initialize new stat fields for new players.
-        await addDoc(playersCollectionRef, { 
-            name: newName, 
-            imageUrl: imageUrl, 
-            totalScore: 0,
-            totalChipsAmassed: 0,
-            secondPlaceCount: 0,
-            zeroChipCount: 0,
-            firstBloodCount: 0,
-            invincibleStreak: 0,
-            ventreMouCount: 0
-        });
+        await addDoc(playersCollectionRef, { name: newName, imageUrl: imageUrl, totalScore: 0, totalChipsAmassed: 0, secondPlaceCount: 0, zeroChipCount: 0, firstBloodCount: 0, invincibleStreak: 0, ventreMouCount: 0 });
         setNewName(''); setImageUrl('');
     };
-
     const handleRemoveClick = (player: PlayerWithStats) => { setPlayerToRemove(player); setShowConfirmModal(true); };
     const confirmRemovePlayer = async () => {
         if (!playerToRemove) return;
         await deleteDoc(doc(db, `artifacts/${appId}/public/data/players`, playerToRemove.id));
         setShowConfirmModal(false); setPlayerToRemove(null);
     };
-
     const handleEditClick = (player: PlayerWithStats) => {
         setPlayerToEdit(player);
         setShowEditModal(true);
     };
-
     const handleUpdatePlayer = async (playerId: string, updatedData: { name: string; imageUrl: string }) => {
         const playerRef = doc(db, `artifacts/${appId}/public/data/players`, playerId);
         await updateDoc(playerRef, updatedData);
         setShowEditModal(false);
         setPlayerToEdit(null);
     };
-
-    return (
-        <div className="space-y-6">
-            <ConfirmationModal show={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmRemovePlayer} title="Confirmer la suppression">
-                <p>Êtes-vous sûr de vouloir supprimer le joueur <strong>{playerToRemove?.name}</strong>? Cette action est irréversible.</p>
-            </ConfirmationModal>
-            <EditPlayerModal show={showEditModal} player={playerToEdit} onClose={() => setShowEditModal(false)} onUpdate={handleUpdatePlayer}/>
-            {isAdmin && (
-                <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg">
-                    <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Ajouter un Joueur</h2>
-                    <div className="flex flex-col md:flex-row gap-4">
-                        <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nom du joueur" className="flex-grow bg-gray-700 text-white placeholder-gray-400 p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-                        <input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="URL de l'image (optionnel)" className="flex-grow bg-gray-700 text-white placeholder-gray-400 p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-                        <button onClick={addPlayer} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 sm:px-6 rounded-md flex items-center justify-center transition-colors"><PlusCircle size={20} className="mr-2"/>Ajouter</button>
-                    </div>
-                </div>
-            )}
-            <div className="space-y-4">
-                {players.map(player => <PlayerCard key={player.id} player={player} onRemove={handleRemoveClick} onEdit={handleEditClick} isAdmin={isAdmin} onViewProfile={onViewProfile} />)}
-            </div>
-        </div>
-    );
+    return <div className="space-y-6"><ConfirmationModal show={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmRemovePlayer} title="Confirmer la suppression"><p>Êtes-vous sûr de vouloir supprimer le joueur <strong>{playerToRemove?.name}</strong>? Cette action est irréversible.</p></ConfirmationModal><EditPlayerModal show={showEditModal} player={playerToEdit} onClose={() => setShowEditModal(false)} onUpdate={handleUpdatePlayer}/>{isAdmin && (<div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg"><h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Ajouter un Joueur</h2><div className="flex flex-col md:flex-row gap-4"><input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nom du joueur" className="flex-grow bg-gray-700 text-white placeholder-gray-400 p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/><input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="URL de l'image (optionnel)" className="flex-grow bg-gray-700 text-white placeholder-gray-400 p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/><button onClick={addPlayer} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 sm:px-6 rounded-md flex items-center justify-center transition-colors"><PlusCircle size={20} className="mr-2"/>Ajouter</button></div></div>)}<div className="space-y-4">{players.map(player => <PlayerCard key={player.id} player={player} onRemove={handleRemoveClick} onEdit={handleEditClick} isAdmin={isAdmin} onViewProfile={onViewProfile} />)}</div></div>;
 }
 const NewGame: FC<{ players: Player[]; onGameEnd: (scoredPlayers: GamePlayer[]) => Promise<void>; activeSeason: Season | null; showAlert: (message: string, type?: 'info' | 'error' | 'success') => void; }> = ({ players, onGameEnd, activeSeason, showAlert }) => {
     const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
     const [chipCounts, setChipCounts] = useState<{ [key: string]: string }>({});
     const [eliminationOrder, setEliminationOrder] = useState<string[]>([]);
     const [isGameStarted, setIsGameStarted] = useState(false);
-
     const gameParticipants = useMemo(() => players.filter(p => selectedPlayers.includes(p.id)), [players, selectedPlayers]);
-
     const handleEliminatePlayer = (playerId: string) => {
-        if (!eliminationOrder.includes(playerId)) {
-            setEliminationOrder(prev => [...prev, playerId]);
-        }
+        if (!eliminationOrder.includes(playerId)) setEliminationOrder(prev => [...prev, playerId]);
     };
-    
     const handleChipCountChange = (playerId: string, value: string) => {
         setChipCounts(prev => ({...prev, [playerId]: value}));
-        if(value && parseInt(value, 10) >= 0) {
-            setEliminationOrder(prev => prev.filter(id => id !== playerId));
-        }
+        if(value && parseInt(value, 10) >= 0) setEliminationOrder(prev => prev.filter(id => id !== playerId));
     }
-
     const resetEliminations = () => {
         setEliminationOrder([]);
         setChipCounts({});
     };
-
     const finishGame = async () => {
         const totalPlayers = gameParticipants.length;
-        
         const eliminatedPlayers = eliminationOrder.map((playerId, index) => {
             const player = gameParticipants.find(p => p.id === playerId);
-            return {
-                playerId,
-                name: player?.name || 'Inconnu',
-                chipCount: 0,
-                rank: totalPlayers - index,
-                score: (totalPlayers - (totalPlayers - index)) * 10
-            };
+            return { playerId, name: player?.name || 'Inconnu', chipCount: 0, rank: totalPlayers - index, score: (totalPlayers - (totalPlayers - index)) * 10 };
         });
-
-        const survivors = gameParticipants
-            .filter(p => !eliminationOrder.includes(p.id))
-            .map(p => ({
-                playerId: p.id,
-                name: p.name,
-                chipCount: parseInt(chipCounts[p.id] || "0", 10),
-            }))
-            .sort((a, b) => b.chipCount - a.chipCount);
-        
-        const survivorRankings = survivors.map((survivor, index) => {
-            const rank = index + 1;
-            return {
-                ...survivor,
-                rank,
-                score: (totalPlayers - rank) * 10
-            }
-        });
-        
+        const survivors = gameParticipants.filter(p => !eliminationOrder.includes(p.id)).map(p => ({ playerId: p.id, name: p.name, chipCount: parseInt(chipCounts[p.id] || "0", 10) })).sort((a, b) => b.chipCount - a.chipCount);
+        const survivorRankings = survivors.map((survivor, index) => ({ ...survivor, rank: index + 1, score: (totalPlayers - rank) * 10 }));
         const allRankedPlayers = [...survivorRankings, ...eliminatedPlayers].sort((a,b) => a.rank - b.rank);
-        
-        if(allRankedPlayers.length !== totalPlayers){
-            showAlert("Erreur dans le classement, veuillez vérifier les données.", "error");
-            return;
-        }
-
+        if(allRankedPlayers.length !== totalPlayers){ showAlert("Erreur dans le classement, veuillez vérifier les données.", "error"); return; }
         await onGameEnd(allRankedPlayers);
     };
-    
-    if (!activeSeason) {
-        return <div className="bg-yellow-900 text-yellow-200 p-4 rounded-lg text-center">Aucune saison n'est active. Veuillez en activer une pour lancer une partie.</div>
-    }
-    
-    return (
-        <div className="relative">
-            {!isGameStarted ? (
-                <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg space-y-6">
-                    <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Sélectionner les Joueurs</h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
-                        {players.map(player => (
-                            <div key={player.id} onClick={() => setSelectedPlayers(prev => prev.includes(player.id) ? prev.filter(pId => pId !== player.id) : [...prev, player.id])} className={`p-3 rounded-lg cursor-pointer transition-all border-2 ${selectedPlayers.includes(player.id) ? 'bg-indigo-600 border-indigo-400' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}>
-                                <div className="flex flex-col items-center text-center"><img src={player.imageUrl || `https://placehold.co/80x80/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full mb-2 object-cover"/><p className="text-white font-medium text-sm sm:text-base">{player.name}</p></div>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="flex justify-center pt-4"><button onClick={() => setIsGameStarted(true)} disabled={selectedPlayers.length < 2} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 sm:px-8 rounded-md flex items-center justify-center disabled:bg-gray-500 disabled:cursor-not-allowed w-full sm:w-auto"><Gamepad2 size={20} className="mr-2"/>Démarrer la Partie ({selectedPlayers.length})</button></div>
-                </div>
-            ) : (
-                <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg space-y-4">
-                     <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Résultats de la partie</h2>
-                     {gameParticipants.map(player => {
-                        const isEliminated = eliminationOrder.includes(player.id);
-                        const eliminationRank = isEliminated ? gameParticipants.length - eliminationOrder.indexOf(player.id) : null;
-                        
-                        return (
-                            <div key={player.id} className="flex items-center gap-4 p-2 rounded-lg bg-gray-700">
-                                <img src={player.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full object-cover"/>
-                                <label className="flex-1 text-white font-medium">{player.name}</label>
-                                {isEliminated ? (
-                                    <span className="text-red-400 font-bold">Sorti en {eliminationRank}ème position</span>
-                                ) : (
-                                    <>
-                                        <input type="number" value={chipCounts[player.id] || ''} onChange={e => handleChipCountChange(player.id, e.target.value)} placeholder="Jetons" className="bg-gray-600 text-white p-2 w-28 rounded-md border border-gray-500"/>
-                                        <button onClick={() => handleEliminatePlayer(player.id)} disabled={!!chipCounts[player.id]} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2 disabled:bg-gray-500 disabled:cursor-not-allowed"><LogOut size={16}/>Éliminer</button>
-                                    </>
-                                )}
-                            </div>
-                        )
-                     })}
-                     <div className="flex justify-between items-center pt-4">
-                        <button onClick={resetEliminations} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2"><RefreshCw size={16}/>Réinitialiser</button>
-                        <button onClick={finishGame} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">Terminer la Partie</button>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+    if (!activeSeason) return <div className="bg-yellow-900 text-yellow-200 p-4 rounded-lg text-center">Aucune saison n'est active. Veuillez en activer une pour lancer une partie.</div>
+    return <div className="relative">{!isGameStarted ? <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg space-y-6"><h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Sélectionner les Joueurs</h2><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">{players.map(player => <div key={player.id} onClick={() => setSelectedPlayers(prev => prev.includes(player.id) ? prev.filter(pId => pId !== player.id) : [...prev, player.id])} className={`p-3 rounded-lg cursor-pointer transition-all border-2 ${selectedPlayers.includes(player.id) ? 'bg-indigo-600 border-indigo-400' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}><div className="flex flex-col items-center text-center"><img src={player.imageUrl || `https://placehold.co/80x80/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full mb-2 object-cover"/><p className="text-white font-medium text-sm sm:text-base">{player.name}</p></div></div>)}</div><div className="flex justify-center pt-4"><button onClick={() => setIsGameStarted(true)} disabled={selectedPlayers.length < 2} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 sm:px-8 rounded-md flex items-center justify-center disabled:bg-gray-500 disabled:cursor-not-allowed w-full sm:w-auto"><Gamepad2 size={20} className="mr-2"/>Démarrer la Partie ({selectedPlayers.length})</button></div></div> : <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg space-y-4"><h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Résultats de la partie</h2>{gameParticipants.map(player => { const isEliminated = eliminationOrder.includes(player.id); const eliminationRank = isEliminated ? gameParticipants.length - eliminationOrder.indexOf(player.id) : null; return <div key={player.id} className="flex items-center gap-4 p-2 rounded-lg bg-gray-700"><img src={player.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full object-cover"/><label className="flex-1 text-white font-medium">{player.name}</label>{isEliminated ? <span className="text-red-400 font-bold">Sorti en {eliminationRank}ème position</span> : <> <input type="number" value={chipCounts[player.id] || ''} onChange={e => handleChipCountChange(player.id, e.target.value)} placeholder="Jetons" className="bg-gray-600 text-white p-2 w-28 rounded-md border border-gray-500"/><button onClick={() => handleEliminatePlayer(player.id)} disabled={!!chipCounts[player.id]} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2 disabled:bg-gray-500 disabled:cursor-not-allowed"><LogOut size={16}/>Éliminer</button></>}</div>})} <div className="flex justify-between items-center pt-4"><button onClick={resetEliminations} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2"><RefreshCw size={16}/>Réinitialiser</button><button onClick={finishGame} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">Terminer la Partie</button></div></div>}</div>;
 }
 const Leaderboard: FC<{ players: PlayerWithStats[]; onViewProfile: (playerId: string) => void; }> = ({ players, onViewProfile }) => {
      const sortedPlayers = [...players].sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
@@ -637,59 +384,28 @@ const SeasonManagement: FC<{ seasons: Season[]; playersWithStats: PlayerWithStat
     const [imageUrl, setImageUrl] = useState('');
     const [endDate, setEndDate] = useState('');
     const [prize, setPrize] = useState('');
-
     const handleCreateSeason = async () => {
-        if (!name.trim() || !endDate) { 
-            showAlert("Le nom et la date de fin sont obligatoires.", "error"); 
-            return; 
-        }
+        if (!name.trim() || !endDate) { showAlert("Le nom et la date de fin sont obligatoires.", "error"); return; }
         const seasonsCollectionRef = collection(db, `artifacts/${appId}/public/data/seasons`);
         await addDoc(seasonsCollectionRef, { name, imageUrl, endDate: Timestamp.fromDate(new Date(endDate)), prize, isActive: seasons.length === 0, isClosed: false, });
         setName(''); setImageUrl(''); setEndDate(''); setPrize('');
     };
-    
     return (
         <div className="space-y-8">
             <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg">
                 <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Créer une nouvelle saison</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Nom de la saison" className="bg-gray-700 text-white p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-                    <input type="text" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="URL de l'image (optionnel)" className="bg-gray-700 text-white p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-gray-700 text-white p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-                    <input type="text" value={prize} onChange={e => setPrize(e.target.value)} placeholder="Lot à gagner (optionnel)" className="bg-gray-700 text-white p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-                    <button onClick={handleCreateSeason} className="md:col-span-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-md flex items-center justify-center transition-colors"><PlusCircle size={20} className="mr-2"/>Créer la Saison</button>
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Nom de la saison" className="bg-gray-700 text-white p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/><input type="text" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="URL de l'image (optionnel)" className="bg-gray-700 text-white p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-gray-700 text-white p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/><input type="text" value={prize} onChange={e => setPrize(e.target.value)} placeholder="Lot à gagner (optionnel)" className="bg-gray-700 text-white p-3 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"/><button onClick={handleCreateSeason} className="md:col-span-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-md flex items-center justify-center transition-colors"><PlusCircle size={20} className="mr-2"/>Créer la Saison</button></div>
             </div>
-            
             <div className="space-y-4">
                 <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Liste des Saisons</h2>
                 {seasons.sort((a,b) => (b.endDate.seconds || 0) - (a.endDate.seconds || 0)).map(season => (
                     <div key={season.id} className="bg-gray-800 p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between">
-                       <div className="flex items-center">
-                           <img src={season.imageUrl || `https://placehold.co/80x45/1f2937/ffffff?text=S`} alt={season.name} className="w-20 h-12 object-cover rounded mr-4"/>
-                           <div>
-                               <p className="text-white font-bold">{season.name}</p>
-                               <p className="text-sm text-gray-400">Termine le: {formatDate(season.endDate)}</p>
-                           </div>
-                       </div>
-                       <div className="mt-4 sm:mt-0 flex items-center gap-2">
-                           {season.isActive && <span className="flex items-center gap-2 text-green-400 font-bold bg-green-900/50 px-3 py-1 rounded-full"><PlayCircle size={16}/>Active</span>}
-                           {season.isActive && <button onClick={() => onEditSeason(season)} className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-full"><Pencil size={16}/></button>}
-                           {season.isClosed && <span className="flex items-center gap-2 text-red-400 font-bold bg-red-900/50 px-3 py-1 rounded-full"><Archive size={16}/>Fermée</span>}
-                           {!season.isActive && !season.isClosed && <button onClick={() => onActivateSeason(season, playersWithStats)} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-md">Activer</button>}
-                       </div>
+                       <div className="flex items-center"><img src={season.imageUrl || `https://placehold.co/80x45/1f2937/ffffff?text=S`} alt={season.name} className="w-20 h-12 object-cover rounded mr-4"/><div><p className="text-white font-bold">{season.name}</p><p className="text-sm text-gray-400">Termine le: {formatDate(season.endDate)}</p></div></div>
+                       <div className="mt-4 sm:mt-0 flex items-center gap-2">{season.isActive && <span className="flex items-center gap-2 text-green-400 font-bold bg-green-900/50 px-3 py-1 rounded-full"><PlayCircle size={16}/>Active</span>}{season.isActive && <button onClick={() => onEditSeason(season)} className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-full"><Pencil size={16}/></button>}{season.isClosed && <span className="flex items-center gap-2 text-red-400 font-bold bg-red-900/50 px-3 py-1 rounded-full"><Archive size={16}/>Fermée</span>}{!season.isActive && !season.isClosed && <button onClick={() => onActivateSeason(season, playersWithStats)} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-md">Activer</button>}</div>
                     </div>
                 ))}
             </div>
-
-            <div className="bg-red-900/50 border-2 border-red-500 p-4 sm:p-6 rounded-lg shadow-lg mt-12">
-                <h2 className="text-xl sm:text-2xl font-bold text-red-300 mb-4 flex items-center"><AlertTriangle className="mr-3" />Zone de Danger</h2>
-                <p className="text-red-300 mb-4">L'action ci-dessous est irréversible et entraînera une perte complète de toutes les données de jeu.</p>
-                <button onClick={onGeneralReset} className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-md flex items-center justify-center transition-colors w-full sm:w-auto">
-                    <Trash2 size={20} className="mr-2"/>
-                    Réinitialisation Générale (RAZ)
-                </button>
-            </div>
+            <div className="bg-red-900/50 border-2 border-red-500 p-4 sm:p-6 rounded-lg shadow-lg mt-12"><h2 className="text-xl sm:text-2xl font-bold text-red-300 mb-4 flex items-center"><AlertTriangle className="mr-3" />Zone de Danger</h2><p className="text-red-300 mb-4">L'action ci-dessous est irréversible et entraînera une perte complète de toutes les données de jeu.</p><button onClick={onGeneralReset} className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-md flex items-center justify-center transition-colors w-full sm:w-auto"><Trash2 size={20} className="mr-2"/>Réinitialisation Générale (RAZ)</button></div>
         </div>
     );
 };
@@ -698,7 +414,6 @@ const EditSeasonModal: FC<{ show: boolean; onClose: () => void; season: Season |
     const [imageUrl, setImageUrl] = useState('');
     const [endDate, setEndDate] = useState('');
     const [prize, setPrize] = useState('');
-
     useEffect(() => {
         if(season) {
             setName(season.name);
@@ -707,39 +422,16 @@ const EditSeasonModal: FC<{ show: boolean; onClose: () => void; season: Season |
             setPrize(season.prize);
         }
     }, [season]);
-    
     if (!show || !season) return null;
-
     const handleSave = () => {
         if (!name.trim() || !endDate) return;
         onUpdate(season.id, { name, imageUrl, endDate, prize });
     };
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
-            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-gray-700">
-                <h3 className="text-xl font-bold text-white mb-4">Éditer la saison</h3>
-                <div className="space-y-4 my-6">
-                     <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Nom de la saison" className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600"/>
-                     <input type="text" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="URL de l'image (optionnel)" className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600"/>
-                     <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600"/>
-                     <input type="text" value={prize} onChange={e => setPrize(e.target.value)} placeholder="Lot à gagner (optionnel)" className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600"/>
-                </div>
-                <div className="flex justify-end gap-4">
-                    <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Annuler</button>
-                    <button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-md">Enregistrer</button>
-                </div>
-            </div>
-        </div>
-    );
+    return <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4"><div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg border border-gray-700"><h3 className="text-xl font-bold text-white mb-4">Éditer la saison</h3><div className="space-y-4 my-6"><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Nom de la saison" className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600"/><input type="text" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="URL de l'image (optionnel)" className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600"/><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600"/><input type="text" value={prize} onChange={e => setPrize(e.target.value)} placeholder="Lot à gagner (optionnel)" className="w-full bg-gray-700 text-white p-3 rounded-md border border-gray-600"/></div><div className="flex justify-end gap-4"><button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Annuler</button><button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-md">Enregistrer</button></div></div></div>;
 };
 const PastSeasons: FC<{seasons: Season[], isAdmin: boolean, onDeleteSeason: (seasonId: string) => void}> = ({ seasons, isAdmin, onDeleteSeason }) => {
     const closedSeasons = useMemo(() => seasons.filter(s => s.isClosed).sort((a, b) => b.endDate.seconds - a.endDate.seconds), [seasons]);
-
-    if(closedSeasons.length === 0) {
-        return <p className="text-gray-400 text-center py-8">Il n'y a pas encore de saison archivée.</p>
-    }
-    
+    if(closedSeasons.length === 0) return <p className="text-gray-400 text-center py-8">Il n'y a pas encore de saison archivée.</p>
     return (
         <div className="space-y-8">
              <div className="bg-gray-800 p-4 rounded-lg shadow-lg flex items-center text-indigo-400"><ArchiveRestore size={24} className="mr-3" /><h2 className="text-xl sm:text-2xl font-bold">Archives des Saisons</h2></div>
@@ -748,29 +440,11 @@ const PastSeasons: FC<{seasons: Season[], isAdmin: boolean, onDeleteSeason: (sea
                 return (
                     <div key={season.id} className="bg-gray-800 p-6 rounded-lg shadow-lg">
                         <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <h3 className="text-2xl font-bold text-yellow-400">{season.name}</h3>
-                                <p className="text-gray-400">Saison terminée le {formatDate(season.endDate)}</p>
-                            </div>
+                            <div><h3 className="text-2xl font-bold text-yellow-400">{season.name}</h3><p className="text-gray-400">Saison terminée le {formatDate(season.endDate)}</p></div>
                             {isAdmin && <button onClick={() => onDeleteSeason(season.id)} className="bg-red-800 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-md"><Trash2 size={16}/></button>}
                         </div>
-                        {winner && season.prize && (
-                            <div className="bg-yellow-900/50 text-yellow-300 p-3 rounded-lg text-center mb-4">
-                                <p>🏆 <strong className="font-bold">{winner.name}</strong> a gagné : {season.prize}</p>
-                            </div>
-                        )}
-                        <ul className="space-y-2">
-                           {season.finalLeaderboard?.sort((a,b) => (a.rank || 0) - (b.rank || 0)).map(player => (
-                               <li key={player.id} className="flex items-center justify-between bg-gray-700 p-3 rounded-md">
-                                   <div className="flex items-center">
-                                       <span className="font-bold text-lg w-8">{player.rank}</span>
-                                       <img src={player.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full mx-3 object-cover"/>
-                                       <span className="text-white">{player.name}</span>
-                                   </div>
-                                   <div className="font-semibold text-indigo-400">{player.totalScore} pts</div>
-                               </li>
-                           ))}
-                        </ul>
+                        {winner && season.prize && (<div className="bg-yellow-900/50 text-yellow-300 p-3 rounded-lg text-center mb-4"><p>🏆 <strong className="font-bold">{winner.name}</strong> a gagné : {season.prize}</p></div>)}
+                        <ul className="space-y-2">{season.finalLeaderboard?.sort((a,b) => (a.rank || 0) - (b.rank || 0)).map(player => <li key={player.id} className="flex items-center justify-between bg-gray-700 p-3 rounded-md"><div className="flex items-center"><span className="font-bold text-lg w-8">{player.rank}</span><img src={player.imageUrl || `https://placehold.co/40x40/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-10 h-10 rounded-full mx-3 object-cover"/><span className="text-white">{player.name}</span></div><div className="font-semibold text-indigo-400">{player.totalScore} pts</div></li>)}</ul>
                     </div>
                 );
             })}
@@ -781,117 +455,46 @@ const PlayerProfile: FC<{ player: Player, allGames: Game[], playerAchievements: 
     const globalStats = useMemo(() => {
         const totalGamesPlayed = allGames.filter(g => g.players.some(p => p.playerId === player.id)).length;
         const totalWins = allGames.filter(g => g.players.some(p => p.playerId === player.id && p.rank === 1)).length;
-        
         let totalRanks = 0;
         let lastPlaceCount = 0;
         allGames.forEach(g => {
             const playerInGame = g.players.find(p => p.playerId === player.id);
             if(playerInGame) {
                 totalRanks += playerInGame.rank;
-                if(playerInGame.rank === g.players.length) {
-                    lastPlaceCount++;
-                }
+                if(playerInGame.rank === g.players.length) lastPlaceCount++;
             }
         });
-
         const averageRank = totalGamesPlayed > 0 ? (totalRanks / totalGamesPlayed).toFixed(2) : 'N/A';
-        
         return { totalGamesPlayed, totalWins, averageRank, lastPlaceCount };
     }, [player, allGames]);
-
     const unlockedAchievements = useMemo(() => {
         return achievementsList.filter(ach => playerAchievements.some(pa => pa.playerId === player.id && pa.achievementId === ach.id));
     }, [player, playerAchievements]);
-
     const StatCard: FC<{icon: React.ElementType, emoji: string, value: string | number, label: string, colorClass: string}> = ({ icon, emoji, value, label, colorClass }) => {
         const Icon = icon;
-        return (
-            <div className="bg-gray-700 p-4 rounded-lg flex items-center gap-4">
-                <div className={`p-3 rounded-lg ${colorClass}`}>
-                    <Icon size={28} className="text-white" />
-                </div>
-                <div>
-                    <p className="text-2xl font-bold text-white">{value} <span className="text-xl">{emoji}</span></p>
-                    <p className="text-sm text-gray-400">{label}</p>
-                </div>
-            </div>
-        );
+        return <div className="bg-gray-700 p-4 rounded-lg flex items-center gap-4"><div className={`p-3 rounded-lg ${colorClass}`}><Icon size={28} className="text-white" /></div><div><p className="text-2xl font-bold text-white">{value} <span className="text-xl">{emoji}</span></p><p className="text-sm text-gray-400">{label}</p></div></div>;
     }
-
     return (
         <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-            <div className="flex flex-col sm:flex-row items-center gap-6 mb-8">
-                <img src={player.imageUrl || `https://placehold.co/150x150/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-36 h-36 rounded-full border-4 border-indigo-500 object-cover"/>
-                <div className="text-center sm:text-left">
-                    <h2 className="text-3xl font-bold text-white">{player.name}</h2>
-                    <p className="text-indigo-400">Statistiques globales</p>
-                </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <StatCard icon={Gamepad2} emoji="🎮" value={globalStats.totalGamesPlayed} label="Parties Jouées" colorClass="bg-blue-500" />
-                <StatCard icon={Trophy} emoji="🏆" value={globalStats.totalWins} label="Victoires" colorClass="bg-yellow-500" />
-                <StatCard icon={BarChart2} emoji="📊" value={globalStats.averageRank} label="Classement Moyen" colorClass="bg-green-500" />
-                <StatCard icon={Bomb} emoji="😥" value={globalStats.lastPlaceCount} label="Dernières Places" colorClass="bg-red-500" />
-            </div>
-
-            <div className="mt-8">
-                <h3 className="text-xl font-bold text-white mb-4">Hauts Faits Débloqués</h3>
-                {unlockedAchievements.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {unlockedAchievements.map(ach => (
-                            <div key={ach.id} className="bg-gray-700 p-4 rounded-lg flex items-center gap-4">
-                                <span className="text-4xl">{ach.emoji}</span>
-                                <div>
-                                    <p className="font-bold text-white">{ach.name}</p>
-                                    <p className="text-sm text-gray-400">{ach.description}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <p className="text-gray-400">Aucun haut fait débloqué pour le moment.</p>
-                )}
-            </div>
+            <div className="flex flex-col sm:flex-row items-center gap-6 mb-8"><img src={player.imageUrl || `https://placehold.co/150x150/1f2937/ffffff?text=${player.name.charAt(0)}`} alt={player.name} className="w-36 h-36 rounded-full border-4 border-indigo-500 object-cover"/><div className="text-center sm:text-left"><h2 className="text-3xl font-bold text-white">{player.name}</h2><p className="text-indigo-400">Statistiques globales</p></div></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><StatCard icon={Gamepad2} emoji="🎮" value={globalStats.totalGamesPlayed} label="Parties Jouées" colorClass="bg-blue-500" /><StatCard icon={Trophy} emoji="🏆" value={globalStats.totalWins} label="Victoires" colorClass="bg-yellow-500" /><StatCard icon={BarChart2} emoji="📊" value={globalStats.averageRank} label="Classement Moyen" colorClass="bg-green-500" /><StatCard icon={Bomb} emoji="😥" value={globalStats.lastPlaceCount} label="Dernières Places" colorClass="bg-red-500" /></div>
+            <div className="mt-8"><h3 className="text-xl font-bold text-white mb-4">Hauts Faits Débloqués</h3>{unlockedAchievements.length > 0 ? <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{unlockedAchievements.map(ach => <div key={ach.id} className="bg-gray-700 p-4 rounded-lg flex items-center gap-4"><span className="text-4xl">{ach.emoji}</span><div><p className="font-bold text-white">{ach.name}</p><p className="text-sm text-gray-400">{ach.description}</p></div></div>)}</div> : <p className="text-gray-400">Aucun haut fait débloqué pour le moment.</p>}</div>
         </div>
     );
 }
 const NewsFeed: FC<{ news: NewsItem[] }> = ({ news }) => {
     return (
         <div className="space-y-4">
-            <div className="bg-gray-800 p-4 rounded-lg shadow-lg flex items-center text-indigo-400">
-                <Newspaper size={24} className="mr-3" />
-                <h2 className="text-xl sm:text-2xl font-bold">Fil d'actualités</h2>
-            </div>
-            {news.length > 0 ? (
-                news.map(item => (
-                    <div key={item.id} className="bg-gray-800 p-4 rounded-lg shadow-md">
-                        <p className="text-white">{item.text}</p>
-                        <p className="text-xs text-gray-500 mt-2 text-right">{formatDate(item.createdAt)}</p>
-                    </div>
-                ))
-            ) : (
-                <p className="text-gray-400 text-center py-8">Aucune actualité pour le moment.</p>
-            )}
+            <div className="bg-gray-800 p-4 rounded-lg shadow-lg flex items-center text-indigo-400"><Newspaper size={24} className="mr-3" /><h2 className="text-xl sm:text-2xl font-bold">Fil d'actualités</h2></div>
+            {news.length > 0 ? news.map(item => <div key={item.id} className="bg-gray-800 p-4 rounded-lg shadow-md"><p className="text-white">{item.text}</p><p className="text-xs text-gray-500 mt-2 text-right">{formatDate(item.createdAt)}</p></div>) : <p className="text-gray-400 text-center py-8">Aucune actualité pour le moment.</p>}
         </div>
     );
 }
 const AchievementsList: FC = () => {
     return (
         <div className="space-y-4">
-            <div className="bg-gray-800 p-4 rounded-lg shadow-lg flex items-center text-indigo-400">
-                <Medal size={24} className="mr-3" />
-                <h2 className="text-xl sm:text-2xl font-bold">Liste des Hauts Faits</h2>
-            </div>
-            {achievementsList.map(ach => (
-                <div key={ach.id} className="bg-gray-800 p-4 rounded-lg flex items-start gap-4">
-                    <span className="text-5xl mt-1">{ach.emoji}</span>
-                    <div>
-                        <p className="font-bold text-white text-lg">{ach.name} ({ach.type})</p>
-                        <p className="text-sm text-gray-400">{ach.description}</p>
-                    </div>
-                </div>
-            ))}
+            <div className="bg-gray-800 p-4 rounded-lg shadow-lg flex items-center text-indigo-400"><Medal size={24} className="mr-3" /><h2 className="text-xl sm:text-2xl font-bold">Liste des Hauts Faits</h2></div>
+            {achievementsList.map(ach => <div key={ach.id} className="bg-gray-800 p-4 rounded-lg flex items-start gap-4"><span className="text-5xl mt-1">{ach.emoji}</span><div><p className="font-bold text-white text-lg">{ach.name} ({ach.type})</p><p className="text-sm text-gray-400">{ach.description}</p></div></div>)}
         </div>
     );
 }
@@ -937,14 +540,13 @@ export default function App() {
     useEffect(() => {
         if (!isAuthReady) return;
         setLoading(true);
-
         const playersPath = `artifacts/${appId}/public/data/players`;
         const gamesPath = `artifacts/${appId}/public/data/games`;
         const seasonsPath = `artifacts/${appId}/public/data/seasons`;
         const newsPath = `artifacts/${appId}/public/data/news_feed`;
         const achievementsPath = `artifacts/${appId}/public/data/player_achievements`;
 
-        const unsubPlayers = onSnapshot(query(collection(db, playersPath)), (snap) => { setPlayers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player))); setLoading(false); }, (err) => { console.error("Player read error: ", err); setLoading(false); showAlert("Erreur de lecture (joueurs)", "error"); });
+        const unsubPlayers = onSnapshot(query(collection(db, playersPath)), (snap) => { setPlayers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player))); setLoading(false); }, (err) => { console.error("Player read error: ", err); showAlert("Erreur de lecture (joueurs)", "error"); });
         const unsubGames = onSnapshot(query(collection(db, gamesPath)), (snap) => { setGames(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Game))); }, (err) => { console.error("Games read error: ", err); showAlert("Erreur de lecture (parties)", "error");});
         const unsubSeasons = onSnapshot(query(collection(db, seasonsPath)), (snap) => { setSeasons(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Season))); }, (err) => { console.error("Seasons read error: ", err); showAlert("Erreur de lecture (saisons)", "error");});
         const unsubNews = onSnapshot(query(collection(db, newsPath), orderBy('createdAt', 'desc'), limit(20)), (snap) => { setNewsFeed(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as NewsItem))); }, (err) => { console.error("News read error: ", err); showAlert("Erreur de lecture (actus)", "error");});
@@ -989,9 +591,133 @@ export default function App() {
     };
     const handleAdminLogout = () => { setIsAdmin(false); showAlert("Mode administrateur désactivé"); };
     
-    // --- Main Achievement Logic ---
-    const checkAchievements = async (newGame: Game, updatedPlayers: Player[], allGames: Game[], currentActiveSeason: Season | null) => {
-        // ... implementation in next code block
+    // BUILD FIX: This function was implemented to fix the "is declared but its value is never read" error.
+    const checkAchievements = async (newGame: Game, updatedPlayers: Player[], allGames: Game[], currentActiveSeason: Season) => {
+        const batch = writeBatch(db);
+        const newsCollection = collection(db, `artifacts/${appId}/public/data/news_feed`);
+        const playerAchievementsCollection = collection(db, `artifacts/${appId}/public/data/player_achievements`);
+
+        // Check permanent achievements for each player in the last game
+        for (const p of newGame.players) {
+            const player = updatedPlayers.find(up => up.id === p.playerId);
+            if (!player) continue;
+
+            const hasAchievement = (id: string) => playerAchievements.some(pa => pa.playerId === player.id && pa.achievementId === id);
+
+            // One-off achievements
+            if (!hasAchievement('serial_killer') && newGame.players.length >= 5 && p.rank === 1 && newGame.players.filter(gp => gp.chipCount > 0).length === 1) {
+                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'serial_killer', unlockedAt: Timestamp.now() });
+                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'serial_killer')!.newsPhrase(player.name), createdAt: Timestamp.now() });
+            }
+            if (!hasAchievement('magnate') && p.chipCount > 130000) {
+                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'magnate', unlockedAt: Timestamp.now() });
+                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'magnate')!.newsPhrase(player.name, {chipCount: p.chipCount}), createdAt: Timestamp.now() });
+            } else if (!hasAchievement('evening_millionaire') && p.chipCount > 80000) {
+                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'evening_millionaire', unlockedAt: Timestamp.now() });
+                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'evening_millionaire')!.newsPhrase(player.name, {chipCount: p.chipCount}), createdAt: Timestamp.now() });
+            }
+            if (!hasAchievement('survivor') && newGame.players.length >= 6 && p.chipCount > 0 && p.chipCount <= 3000 && p.rank === newGame.players.filter(gp => gp.chipCount > 0).length) {
+                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'survivor', unlockedAt: Timestamp.now() });
+                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'survivor')!.newsPhrase(player.name), createdAt: Timestamp.now() });
+            }
+
+            // Career total achievements
+            const allPlayerGames = [...allGames, newGame].filter(g => g.players.some(gp => gp.playerId === player.id));
+            if (!hasAchievement('veteran') && allPlayerGames.length >= 10) {
+                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'veteran', unlockedAt: Timestamp.now() });
+                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'veteran')!.newsPhrase(player.name), createdAt: Timestamp.now() });
+            }
+             if (!hasAchievement('pillar') && allPlayerGames.length >= 25) {
+                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'pillar', unlockedAt: Timestamp.now() });
+                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'pillar')!.newsPhrase(player.name), createdAt: Timestamp.now() });
+            }
+             if (!hasAchievement('legend') && allPlayerGames.length >= 50) {
+                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'legend', unlockedAt: Timestamp.now() });
+                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'legend')!.newsPhrase(player.name), createdAt: Timestamp.now() });
+            }
+
+            // Career stat count achievements
+            if (!hasAchievement('poulidor') && (player.secondPlaceCount || 0) >= 10) {
+                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'poulidor', unlockedAt: Timestamp.now() });
+                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'poulidor')!.newsPhrase(player.name), createdAt: Timestamp.now() });
+            }
+             if (!hasAchievement('holed_pocket') && (player.zeroChipCount || 0) >= 10) {
+                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'holed_pocket', unlockedAt: Timestamp.now() });
+                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'holed_pocket')!.newsPhrase(player.name), createdAt: Timestamp.now() });
+            }
+             if (!hasAchievement('first_blood') && (player.firstBloodCount || 0) >= 5) {
+                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'first_blood', unlockedAt: Timestamp.now() });
+                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'first_blood')!.newsPhrase(player.name), createdAt: Timestamp.now() });
+            }
+             if (!hasAchievement('invincible') && (player.invincibleStreak || 0) >= 8) {
+                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'invincible', unlockedAt: Timestamp.now() });
+                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'invincible')!.newsPhrase(player.name), createdAt: Timestamp.now() });
+            }
+            if (!hasAchievement('soft_belly') && (player.ventreMouCount || 0) >= 5) {
+                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'soft_belly', unlockedAt: Timestamp.now() });
+                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'soft_belly')!.newsPhrase(player.name), createdAt: Timestamp.now() });
+            }
+             if (!hasAchievement('the_bubble') && (player.secondPlaceCount || 0) >= 8) {
+                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'the_bubble', unlockedAt: Timestamp.now() });
+                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'the_bubble')!.newsPhrase(player.name), createdAt: Timestamp.now() });
+            }
+
+            // Total chips amassed
+            if (!hasAchievement('millionaire') && (player.totalChipsAmassed || 0) >= 1000000) {
+                 batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'millionaire', unlockedAt: Timestamp.now() });
+                 batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'millionaire')!.newsPhrase(player.name), createdAt: Timestamp.now() });
+            } else if (!hasAchievement('golden_boy') && (player.totalChipsAmassed || 0) >= 500000) {
+                batch.set(doc(playerAchievementsCollection), { playerId: player.id, achievementId: 'golden_boy', unlockedAt: Timestamp.now() });
+                batch.set(doc(newsCollection), { text: achievementsList.find(a => a.id === 'golden_boy')!.newsPhrase(player.name), createdAt: Timestamp.now() });
+            }
+        }
+
+        // Check seasonal achievements
+        const seasonGames = [...allGames, newGame].filter(g => g.seasonId === currentActiveSeason.id);
+        const seasonalAchievements = achievementsList.filter(a => a.type === 'saisonnier');
+
+        for (const achievement of seasonalAchievements) {
+            const playerStats: { [playerId: string]: number } = {};
+            updatedPlayers.forEach(p => playerStats[p.id] = 0);
+
+            if(achievement.id === 'conqueror') seasonGames.forEach(g => { const winner = g.players.find(p => p.rank === 1); if (winner) playerStats[winner.playerId]++; });
+            if(achievement.id === 'red_lantern') seasonGames.forEach(g => { const loser = g.players.find(p => p.rank === g.players.length); if (loser) playerStats[loser.playerId]++; });
+            if(achievement.id === 'eternal_second') seasonGames.forEach(g => { const second = g.players.find(p => p.rank === 2); if (second) playerStats[second.playerId]++; });
+            if(achievement.id === 'kamikaze') seasonGames.forEach(g => { g.players.forEach(p => { if(p.chipCount === 0) playerStats[p.playerId]++; }); });
+            
+            const maxStat = Math.max(...Object.values(playerStats));
+            if (maxStat === 0) continue;
+
+            const newLeaders = Object.keys(playerStats).filter(id => playerStats[id] === maxStat);
+            const oldLeaders = playerAchievements.filter(pa => pa.achievementId === achievement.id).map(pa => pa.playerId);
+
+            const leadersChanged = newLeaders.length !== oldLeaders.length || !newLeaders.every(id => oldLeaders.includes(id));
+
+            if (leadersChanged) {
+                oldLeaders.forEach(oldLeaderId => {
+                    if (!newLeaders.includes(oldLeaderId)) {
+                        const achievementDoc = playerAchievements.find(pa => pa.playerId === oldLeaderId && pa.achievementId === achievement.id);
+                        if (achievementDoc) {
+                            batch.delete(doc(db, `artifacts/${appId}/public/data/player_achievements`, achievementDoc.id));
+                            if (achievement.lossPhrase && newLeaders.length > 0) {
+                                const oldLeaderName = updatedPlayers.find(p => p.id === oldLeaderId)?.name || 'Un ancien';
+                                const newLeaderName = updatedPlayers.find(p => p.id === newLeaders[0])?.name || 'Un nouveau';
+                                batch.set(doc(newsCollection), { text: achievement.lossPhrase(oldLeaderName, newLeaderName), createdAt: Timestamp.now() });
+                            }
+                        }
+                    }
+                });
+                newLeaders.forEach(newLeaderId => {
+                    if (!oldLeaders.includes(newLeaderId)) {
+                        const leaderName = updatedPlayers.find(p => p.id === newLeaderId)?.name || 'Un joueur';
+                        batch.set(doc(playerAchievementsCollection), { playerId: newLeaderId, achievementId: achievement.id, unlockedAt: Timestamp.now() });
+                        batch.set(doc(newsCollection), { text: achievement.newsPhrase(leaderName), createdAt: Timestamp.now() });
+                    }
+                });
+            }
+        }
+
+        await batch.commit();
     };
 
     const handleGameEnd = async (scoredPlayers: GamePlayer[]) => {
@@ -1004,7 +730,6 @@ export default function App() {
 
         const updatedPlayersData: Player[] = JSON.parse(JSON.stringify(players));
 
-        // Update player stats from the game that just ended
         for (const sp of scoredPlayers) {
             const playerIndex = updatedPlayersData.findIndex(p => p.id === sp.playerId);
             if (playerIndex === -1) continue;
@@ -1012,7 +737,6 @@ export default function App() {
             const playerRef = doc(db, `artifacts/${appId}/public/data/players`, sp.playerId);
             const playerData = updatedPlayersData[playerIndex];
             
-            // Initialize fields if they don't exist
             playerData.totalScore = (playerData.totalScore || 0) + sp.score;
             playerData.totalChipsAmassed = (playerData.totalChipsAmassed || 0) + sp.chipCount;
             playerData.secondPlaceCount = playerData.secondPlaceCount || 0;
@@ -1021,17 +745,15 @@ export default function App() {
             playerData.invincibleStreak = playerData.invincibleStreak || 0;
             playerData.ventreMouCount = playerData.ventreMouCount || 0;
             
-            // Update stats based on rank
             if (sp.rank === 2) playerData.secondPlaceCount++;
             if (sp.chipCount === 0) playerData.zeroChipCount++;
             if (sp.rank === scoredPlayers.length) {
                 playerData.firstBloodCount++;
-                playerData.invincibleStreak = 0; // Streak is broken
+                playerData.invincibleStreak = 0; 
             } else {
                 playerData.invincibleStreak++;
             }
-            const middleRank = Math.ceil(scoredPlayers.length / 2);
-            if (sp.rank === middleRank) {
+            if (scoredPlayers.length % 2 !== 0 && sp.rank === Math.ceil(scoredPlayers.length / 2)) {
                 playerData.ventreMouCount++;
             }
             
@@ -1049,13 +771,10 @@ export default function App() {
         showAlert("La partie a été enregistrée !", "success");
         setView('news');
 
-        // Now, check for achievements with the fresh data
         await checkAchievements({id: newGameRef.id, ...newGameData, date: Timestamp.fromDate(newGameData.date)}, updatedPlayersData, games, activeSeason);
     };
 
     const handleGameUpdate = async (gameToUpdate: Game, newPlayers: GamePlayer[]) => {
-        // This function would need a major refactor to correctly rollback and re-apply stats for achievements.
-        // For now, it only updates scores.
         showAlert("La modification de partie ne met pas à jour les hauts faits pour le moment.", "info");
         const batch = writeBatch(db);
         const gameRef = doc(db, `artifacts/${appId}/public/data/games`, gameToUpdate.id);
@@ -1136,15 +855,7 @@ export default function App() {
             }
             for (const player of players) {
                 const playerRef = doc(db, `artifacts/${appId}/public/data/players`, player.id);
-                batch.update(playerRef, { 
-                    totalScore: 0,
-                    totalChipsAmassed: 0,
-                    secondPlaceCount: 0,
-                    zeroChipCount: 0,
-                    firstBloodCount: 0,
-                    invincibleStreak: 0,
-                    ventreMouCount: 0
-                });
+                batch.update(playerRef, { totalScore: 0, totalChipsAmassed: 0, secondPlaceCount: 0, zeroChipCount: 0, firstBloodCount: 0, invincibleStreak: 0, ventreMouCount: 0 });
             }
             await batch.commit();
             showAlert("Réinitialisation générale terminée avec succès !", "success");
