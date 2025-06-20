@@ -117,7 +117,7 @@ const achievementsList: Achievement[] = [
     { id: 'metronome', name: "Le Métronome", description: 'Détenir la plus longue série de participations consécutives cette saison.', emoji: '📅', type: 'saisonnier', newsPhrase: (p) => `📅 Comme une horloge, ${p} prend la tête de la plus longue série de participations consécutives !`},
     { id: 'champion', name: 'Le Champion', description: 'Gagner une saison en terminant à la 1ère place du classement.', emoji: '🏆', type: 'permanent', newsPhrase: (p, details) => `🏆 ${p} est sacré Champion de la saison "${details.seasonName}" !` },
     { id: 'double_champion', name: 'Le Double', description: 'Gagner 2 saisons.', emoji: '🏆🏆', type: 'permanent', newsPhrase: (p) => `🏆🏆 Impressionnant ! ${p} remporte sa deuxième saison !` },
-    { id: 'back_to_back', name: 'Le Back-to-Back', description: 'Gagner 2 saisons de suite.', emoji: '�🏆', type: 'permanent', newsPhrase: (p) => `🔁🏆 Le doublé ! ${p} remporte deux saisons consécutives !` },
+    { id: 'back_to_back', name: 'Le Back-to-Back', description: 'Gagner 2 saisons de suite.', emoji: '🔁🏆', type: 'permanent', newsPhrase: (p) => `🔁🏆 Le doublé ! ${p} remporte deux saisons consécutives !` },
     { id: 'dynasty', name: 'La Dynastie', description: 'Gagner 3 saisons.', emoji: '👑👑👑', type: 'permanent', newsPhrase: (p) => `👑👑👑 ${p} établit une véritable dynastie avec 3 saisons remportées !` },
     { id: 'emperor', name: "L'Empereur", description: 'Gagner 4 saisons.', emoji: '🏰', type: 'permanent', newsPhrase: (p) => `🏰 ${p} n'est plus un simple roi, c'est un Empereur avec 4 titres !` },
     { id: 'poker_god', name: 'Le Dieu du Poker', description: 'Gagner 5 saisons.', emoji: '🌟', type: 'permanent', newsPhrase: (p) => `🌟 Il est au-dessus du commun des mortels. Saluez ${p}, le nouveau Dieu du Poker !` },
@@ -144,7 +144,7 @@ const firebaseConfig = {
   appId: "1:521443160023:web:1c16df12d73b269bd6a592"
 };
 const ADMIN_PASSWORD = 'pokeradmin';
-const APP_VERSION = "4.0.0";
+const APP_VERSION = "4.0.1";
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
